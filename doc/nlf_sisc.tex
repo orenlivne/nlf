@@ -1135,6 +1135,22 @@ demand columns), made conceivable by the $\mathcal{O}(Km)$ per-step cost with on
 (\S\ref{sec:mcalg}) plus standard per-origin aggregation. Benchmarking against Frank--Wolfe and
 Algorithm-B on the published equilibria is the deployable-solver milestone.
 
+\paragraph{The payoff: design optimization} The forward equilibrium is the means, not the end. Its
+motivating problems---congestion \emph{pricing}, origin--destination matrix \emph{calibration},
+capacity \emph{network design}---are bilevel programs optimized over a design $x$ (tolls, demand,
+capacities) subject to the equilibrium $f(x)$, where the load-bearing object is the sensitivity
+$\partial f/\partial x$. Because $f$ is the stationarity of \eqref{eq:master}, that sensitivity is a
+single \emph{adjoint} solve with the \emph{same} symmetric Laplacian Jacobian: the gradient of an outer
+objective with respect to \emph{all} $k$ design variables costs one additional $\Om$ solve,
+\emph{independent of $k$}. A solver that returns only the equilibrium must instead recover this gradient
+by finite differences---$k$ equilibrium re-solves---so the framework is asymptotically $O(k)$ cheaper
+and reaches design problems (thousands of tolled links, $10^6$ demand entries) the re-solve loop cannot.
+A directed single-commodity prototype confirms this on optimal tolling---adjoint gradient versus finite
+difference, with orders-of-magnitude scaling from Sioux Falls to Anaheim
+(\url{https://github.com/orenlivne/dnlf}). The undirected study here is thus a stepping stone: the same
+$\Om$ Laplacian machinery that \emph{solves} \eqref{eq:master} also \emph{differentiates} it---which is
+exactly what bilevel network design needs.
+
 \subsection{One-shot FAS: what we tried, and why we sealed it}\label{sec:fasfail}
 The methodologically pure alternative to Algorithm~\ref{alg:fixed} is a genuinely nonlinear cycle:
 nonlinear relaxation on the nodal balance, the same elimination-and-aggregation hierarchy, full
