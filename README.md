@@ -20,6 +20,21 @@ the paper.
 > does **not** vendor any LAMG+ source. The inner solver is a swappable module: approximate Cholesky and
 > sparse-direct factorization reach the identical `F*` through the fold.
 
+## Results at a glance
+
+Across the SuiteSparse corpus, NLF (multigrid-Newton) is the only one of three solver paradigms robust
+on **both** failure axes — it finishes within budget where a first-order method is iteration-blown
+(ill-conditioning, right) *and* where a sparse-direct interior-point method is fill-blown (poor
+separation, top). In the upper-right corner both competitors fail and NLF is the only solver that
+finishes:
+
+<p align="center"><img src="doc/figures/frontier.png" width="560" alt="Inner-solver robustness frontier: NLF is the only solver robust on both axes"></p>
+
+The whole nonlinear solve costs **2–4 linear Laplacian solves**, and the total wall-clock is empirically
+near-linear (`t ∝ m^0.98`) over five size-decades of real-world graphs:
+
+<p align="center"><img src="doc/figures/scaling.png" width="680" alt="Near-linear scaling over the SuiteSparse corpus"></p>
+
 ## Requirements
 
 - [Julia](https://julialang.org) ≥ 1.10.
