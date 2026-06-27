@@ -20,6 +20,10 @@ the paper.
 > does **not** vendor any LAMG+ source. The inner solver is a swappable module: approximate Cholesky and
 > sparse-direct factorization reach the identical `F*` through the fold.
 
+<p align="center"><img src="doc/figures/formulation.png" width="640" alt="The three instances of the framework: one monotone edge law spans max-flow, minimum-delay routing, and congestion"></p>
+
+<p align="center"><em>Fig. 2.1 — one monotone edge law <code>ρ</code> places maximum flow (saturating tanh), minimum-delay routing (Kleinrock), and congestion (BPR) under a single nonlinear graph Laplacian. Whether <code>ρ</code> saturates fixes the easy/hard (no-fold / fold) dichotomy.</em></p>
+
 ## Results at a glance
 
 Across the SuiteSparse corpus, NLF (multigrid-Newton) is the only one of three solver paradigms robust
