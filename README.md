@@ -24,6 +24,10 @@ the paper.
 
 <p align="center"><em>Fig. 2.1 — one monotone edge law <code>ρ</code> places maximum flow (saturating tanh), minimum-delay routing (Kleinrock), and congestion (BPR) under a single nonlinear graph Laplacian. Whether <code>ρ</code> saturates fixes the easy/hard (no-fold / fold) dichotomy.</em></p>
 
+<p align="center"><img src="doc/figures/cusp.png" width="480" alt="The alpha-V fold: load folds onto the max-flow value F* as the min cut saturates"></p>
+
+<p align="center"><em>Fig. 3.2 — continuation through the fold. As the load <code>α</code> rises the source–sink gap <code>V</code> grows and <code>α</code> folds onto the max-flow value <code>F*</code> as the min cut saturates (<code>J</code> singular); the continuation steps in <code>V</code> to keep steps uniform through the fold. Congestion laws have no such fold.</em></p>
+
 ## Results at a glance
 
 Across the SuiteSparse corpus, NLF (multigrid-Newton) is the only one of three solver paradigms robust
