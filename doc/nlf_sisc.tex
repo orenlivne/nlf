@@ -131,12 +131,17 @@ Extensions---directed multicommodity assignment and a full-multigrid variant---a
 \subsection{The practical problem and its applications}\label{sec:applications}
 Computing an equilibrium flow on a large network is a recurring industrial task, and in each domain
 the computational bottleneck is the same Laplacian-structured solve at the core of \eqref{eq:master}.
+The production formulations of these tasks are typically \emph{directed} (arc-based, with asymmetric
+per-direction costs); this paper studies the \emph{undirected} relaxation as a feasibility study,
+leaving the directed models these domains deploy to future work (\S\ref{sec:extensions}). The
+applications below are thus the \emph{motivating problem classes}, not claims that NLF replaces an
+incumbent in its directed production setting.
 
 \emph{Road traffic (assignment).} Metropolitan planning agencies compute user-equilibrium traffic
 assignment---how drivers distribute over a road map until no route is faster---to evaluate road
-projects and pricing~\cite{beckmann,bpr,boyles-tna}. This is the convex Beckmann program with the
-BPR congestion law; it is NLF's no-fold instance and the setting of our sharpest result
-(\S\ref{sec:traffic}). The incumbent solvers are Frank--Wolfe and bush-based methods
+projects and pricing~\cite{beckmann,bpr,boyles-tna}. Its \emph{undirected} convex relaxation---the
+Beckmann program with the BPR congestion law---is NLF's no-fold instance and the setting of our
+sharpest result (\S\ref{sec:traffic}); the directed user equilibrium itself is future work. The incumbent solvers are Frank--Wolfe and bush-based methods
 (\S\ref{sec:competitor}).
 
 \emph{Communication and data-center routing (minimum delay).} Routing packets to minimize end-to-end
