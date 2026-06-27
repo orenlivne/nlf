@@ -55,7 +55,7 @@ end
 diagpcg_engine = NLFLinearEngine(J->sparse(J), (Js,_,b)->pcg_jacobi(Js,b), "diagPCG")
 INNERS = [("LAMG+",:multigrid),("approxChol",approxchol_engine),("direct",:direct),("diagPCG",diagpcg_engine)]
 
-DATA=joinpath(@__DIR__,"..","data")
+DATA=get(ENV,"GRAPH_DATA",joinpath(@__DIR__,"..","data"))
 DIRECT_NMAX = 150_000   # Cholesky OOMs on larger poorly-separable graphs
 FOLD_NMAX   = 300_000   # cap graph size for the (heavy, 4-solver) fold continuation
 # Comprehensive span: curated structured+multiscale graphs, PLUS a size-spread sample across the corpus.

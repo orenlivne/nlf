@@ -33,7 +33,7 @@ function lbfgs_dual(B,L,d,α; tol=1e-9,tlim=60.0)
     φ=Optim.minimizer(res);g=B'*φ;rho_drho!(f,dρ,g,L);(it=Optim.iterations(res),t=t,r=norm(B*f.-α.*d)/bn,c=Optim.converged(res))
 end
 
-DATA=joinpath(@__DIR__,"..","data"); SIZES=joinpath(DATA,"mtx_sizes.csv")
+DATA=get(ENV,"GRAPH_DATA",joinpath(@__DIR__,"..","data")); SIZES=joinpath(DATA,"mtx_sizes.csv")
 rows=[(split(l,',')[1], parse(Int,split(l,',')[4])) for l in Iterators.drop(eachline(SIZES),1) if length(split(l,','))>=4]
 sort!(rows, by=x->x[2])                       # small -> large, so the bulk finishes first
 OUT="/tmp/nlf_corpus_3solver.csv"
