@@ -43,8 +43,8 @@ inner solve is a replaceable module---a matrix-free first-order method on the du
 (multigrid-Newton, interior-point, first-order) on the same program across $1{,}669$ SuiteSparse
 graphs, \emph{NLF converges on every one}, is fastest-or-only on $85\%$ (median $2.6\times$/$4.2\times$
 faster than the interior-point/first-order baselines where they converge), and is the \emph{only}
-solver to finish within the time budget on the $90$ hardest graphs---ill-conditioned and
-poorly-separable at once (first-order slowed by the former, sparse-direct by the latter).
+solver to finish within a fixed wall-clock budget ($5\times$ NLF's own time) on the $90$ hardest
+graphs---ill-conditioned and poorly-separable at once (first-order slowed by the former, sparse-direct by the latter).
 Robustness is broad: across the full SuiteSparse collection ($2{,}003$ graphs to $1.8\times10^7$ edges,
 plus giants to $5.6\times10^7$), under one BPR instance per graph, NLF converged on all of them at a
 median of $18$ cycles, with a fitted time exponent $t\propto m^{0.98}$. A
@@ -105,8 +105,9 @@ flow, congestion (traffic) routing, and minimum-delay routing as one nonlinear L
 \eqref{eq:master}, with the problem class fixed by a single monotone edge law and the easy/hard
 dichotomy (no-fold vs.\ fold; \S\ref{sec:formulation}) fixed by whether that law saturates. The stationarity equation itself
 is classical---it is the optimality system of a convex, edge-separable network-flow program (monotropic
-programming); our contribution is the \emph{unification}, that one edge law parametrizes all three
-problems, together with its operational consequence: a \emph{single solver} addresses the whole class.
+programming~\cite{rockafellar-monotropic}); our contribution is the \emph{unification}, that one edge law
+parametrizes all three problems, together with its operational consequence: a \emph{single solver}
+addresses the whole class.
 Unlike the electrical-flow and interior-point ``Laplacian paradigm'' for flow~\cite{christiano-etal,daitch-spielman},
 which drive an outer reweighting/barrier loop around \emph{linear} solves to an $(1+\epsilon)$-approximate
 optimum, here the nonlinearity sits in the edge law and the equilibrium reached is \emph{exact}.
@@ -200,8 +201,10 @@ Cholesky~\cite{approxchol,gks2023}, and algebraic multigrid including
 LAMG~\cite{lamg}---address the \emph{linear, unconstrained} problem only. They are the engine, not
 the method: NLF calls a robust $\Om$ linear solver (LAMG+) as its inner kernel but adds the
 nonlinear, capacity-constrained equilibrium layer on top. AMG has also been applied to the
-\emph{square, unconstrained} power-flow \emph{equations}~\cite{bindel-amg-pf}; that is a different
-problem class (no objective, no inequality constraints) from the constrained flow program here.
+\emph{complex, non-separable} AC power-flow \emph{equations}~\cite{bindel-amg-pf}---a nonlinear system
+with no objective and a non-Laplacian Jacobian, solved by nonlinear FAS multigrid with a Gauss--Seidel
+smoother and a multiplicative coarse correction (no Newton, no fold); a different problem class from the
+real, edge-separable, SPD-Laplacian constrained flow program here.
 
 \emph{Multilevel optimization.} NLF is \emph{not} multilevel optimization in the MG/OPT
 sense~\cite{nash-mgopt,gratton-rmtr}: it does not build coarse \emph{optimization} models or recurse
@@ -254,10 +257,12 @@ $c_e$, so $\rho_e$ is bounded and $\rho'_e\to0$ as the edge saturates. As the lo
 turning (limit) point where $\alpha$ caps at the min cut $F^*$ and $J$ becomes singular. Maximum flow ($\rho_e=c_e\tanh(g/c_e)$) and minimum-delay communication routing
 (Kleinrock delay $t_e(f)=1/(c_e-f)$, capacity $c_e$) are of this type; they need continuation through
 the fold (\S\ref{sec:continuation}).
-\item \emph{Soft congestion (rising $\rho$, conductance bounded).} The cost rises with flow but
-imposes no hard cap, so $\rho_e$ is unbounded and $\rho'_e$ stays in $(0,\rho'_{\max}]$, bounded away
-from $0$: there is \emph{no} feasibility limit and \emph{no} fold. Traffic assignment with the BPR
-cost is of this type; $J$ is uniformly well-conditioned and NLF needs no continuation (\S\ref{sec:traffic}).
+\item \emph{Soft congestion (rising $\rho$, no saturation).} The cost rises with flow but
+imposes no hard cap, so $\rho_e$ is unbounded and the law never \emph{saturates}: $\rho'_e>0$ at every
+finite flow (for BPR $\rho'_e$ is large near free flow and decays as $f$ grows, but never reaches $0$).
+Hence $J$ is nonsingular at every equilibrium---there is \emph{no} feasibility limit and \emph{no} fold.
+Traffic assignment with the BPR cost is of this type; on its bounded-flow equilibria $J$ is
+well-conditioned and NLF needs no continuation (\S\ref{sec:traffic}).
 \end{itemize}
 
 \begin{table}[t]\centering\small
@@ -271,7 +276,7 @@ Problem & Marginal cost $t_e(f)$ & Conductance $\rho'_e$ & Fold? & Application\\
 \midrule
 maximum flow~\cite{ahuja-magnanti-orlin,goldberg-tarjan-cacm} & box $|f|\le c_e$ (soft barrier) & $\to0$ at cut      & yes & vision, matching\\
 min-delay routing~\cite{bertsekas-gallager,mendiola-te} & $1/(c_e-f)$ (Kleinrock)         & $\to0$ at $f\!\to\!c_e$ & yes & communication\\
-congestion~\cite{beckmann,bpr,boyles-tna}  & $t^0_e\big(1+b(f/c_e)^{p}\big)$  & $\in(0,\rho'_{\max}]$ & no  & road traffic\\
+congestion~\cite{beckmann,bpr,boyles-tna}  & $t^0_e\big(1+b(f/c_e)^{p}\big)$  & $>0$ (no satn.) & no  & road traffic\\
 \bottomrule
 \end{tabular}}
 \end{table}
@@ -528,8 +533,10 @@ e^{-2V/c_e}\,(1+o(1))$. Hence $F^*-\alpha\asymp e^{-2V/\bar c}$, $\bar c$ the la
 i.e.\ $V=\tfrac{\bar c}{2}\log\tfrac{1}{F^*-\alpha}+O(1)$ and $\psi=\chi^{\top}\phi\propto V$. The
 same expansion gives the cut conductances
 $\rho'_e(g_e)=\mathrm{sech}^2(g_e/c_e)=4e^{-2V/c_e}(1+o(1))$, whence
-$\lambda_{\min}(J)\asymp\sum_{\mathrm{cut}}\rho'_e\propto F^*-\alpha$ (Rayleigh quotient at $\chi$,
-which loads only the cut edges) and $\kappa(J)\sim(F^*-\alpha)^{-1}$.}
+$\lambda_{\min}(J)\le\sum_{\mathrm{cut}}\rho'_e\propto F^*-\alpha$ (Rayleigh quotient at $\chi$,
+which loads only the cut edges); for a \emph{simple} fold the next eigenvalue stays $\Theta(1)$ (the
+deflated spectral gap) and $\lambda_{\max}(J)=\Theta(1)$, so the bound is two-sided and
+$\kappa(J)\sim(F^*-\alpha)^{-1}$.}
 $\chi$ the (a priori unknown) min-cut indicator. We realize this by standard \textbf{pseudo-arclength
 continuation}~\cite{keller,allgower-georg} (Algorithm~\ref{alg:cont}, right), which never forms
 $\chi$: the novelty is not the continuation but \emph{what folds}---a graph-Laplacian whose singular
@@ -619,10 +626,10 @@ congestion equilibrium (signed flows; Wardrop's path-nonnegativity relaxed, App.
 is the convex program \eqref{eq:primal} with
 $\Phi_e(f)=\int_0^f t_e=t^0_e f+\tfrac{b\,t^0_e}{p+1}f^{p+1}/c_e^{p}$; its edge law is the inverse
 marginal cost $\rho_e=t_e^{-1}$, with conductance
-$\rho'_e=1/t_e'(f)=\big(t^0_e b\,p\,(f/c_e)^{p-1}/c_e\big)^{-1}$ that is \emph{bounded away from
-zero}: the cost rises but never caps the flow, so there is no feasibility limit and no fold. The
-Jacobian $J=B\,\mathrm{diag}(\rho')B^{\top}$ is a uniformly well-conditioned weighted Laplacian at
-every iterate, and NLF runs as pure fixed-load cycling (Algorithm~\ref{alg:fixed})---each step an $\Om$ LAMG+ cycle, a handful
+$\rho'_e=1/t_e'(f)=\big(t^0_e b\,p\,(f/c_e)^{p-1}/c_e\big)^{-1}>0$ at every \emph{finite} flow: the cost
+rises but never caps the flow (the law does not saturate), so there is no feasibility limit and no fold.
+The Jacobian $J=B\,\mathrm{diag}(\rho')B^{\top}$ is a well-conditioned weighted Laplacian at every
+bounded-flow iterate, and NLF runs as pure fixed-load cycling (Algorithm~\ref{alg:fixed})---each step an $\Om$ LAMG+ cycle, a handful
 of steps in total, $\Om$ overall.\footnote{We use a strictly convex, twice-differentiable form of
 \eqref{eq:bpr} with the same free-flow and degree-$p$ congestion structure and real $(t^0_e,c_e,b,p)$
 from the data; this regularizes the free-flow threshold so the dual problem is well posed. ``Practical
@@ -1142,12 +1149,15 @@ capacities) subject to the equilibrium $f(x)$, where the load-bearing object is 
 $\partial f/\partial x$. Because $f$ is the stationarity of \eqref{eq:master}, that sensitivity is a
 single \emph{adjoint} solve with the \emph{same} symmetric Laplacian Jacobian: the gradient of an outer
 objective with respect to \emph{all} $k$ design variables costs one additional $\Om$ solve,
-\emph{independent of $k$}. A solver that returns only the equilibrium must instead recover this gradient
-by finite differences---$k$ equilibrium re-solves---so the framework is asymptotically $O(k)$ cheaper
-and reaches design problems (thousands of tolled links, $10^6$ demand entries) the re-solve loop cannot.
-A directed single-commodity prototype confirms this on optimal tolling---adjoint gradient versus finite
-difference, with orders-of-magnitude scaling from Sioux Falls to Anaheim
-(\url{https://github.com/orenlivne/dnlf}). The undirected study here is thus a stepping stone: the same
+\emph{independent of $k$}. Equilibrium sensitivity is itself classical---the adjoint/implicit-function
+calculus of Tobin and Friesz~\cite{tobin-friesz} and the bilevel network-design literature it seeds
+compute exactly this derivative---so the contribution is not the adjoint but that here it \emph{is} the
+same $\Om$ Laplacian solve: available natively, and near-linear rather than a direct KKT factorization
+on poorly-separable designs. (Against a derivative-free outer loop the adjoint saves a factor of $k$
+equilibrium re-solves---but so does any sensitivity-equipped incumbent; the honest edge is the inner
+solve's cost, not the existence of a gradient.) A directed single-commodity prototype validates this on
+optimal tolling---the adjoint gradient matches finite differences, at one $\Om$ solve per design
+gradient regardless of $k$ (\url{https://github.com/orenlivne/dnlf}). The undirected study here is thus a stepping stone: the same
 $\Om$ Laplacian machinery that \emph{solves} \eqref{eq:master} also \emph{differentiates} it---which is
 exactly what bilevel network design needs.
 
@@ -1184,8 +1194,10 @@ The same edge-separable energy expresses optimal transport in Beckmann (flow) fo
 monotone edge-separable cost subject to $Bf=\mu-\nu$ is exactly \eqref{eq:master}---the quadratic
 ($H^{-1}$) cost a single $\Om$ Laplacian solve, the $W_1$ limit ($p\to1$) the non-smooth saturating
 member, a natural fold instance. The quadratically-regularized form, whose dual Hessian is an
-active-subgraph Laplacian solved in the literature by direct factorization~\cite{essid-solomon}, is a
-natural opening for the near-linear inner solve; a dedicated treatment is left to future work.
+active-subgraph Laplacian solved in the literature by direct factorization~\cite{essid-solomon}, is
+where a near-linear inner could help; whether it is competitive is itself the open question, since the
+$W_1$/Beckmann limit is a min-cost flow with strong combinatorial and direct solvers. We leave an
+honestly-benchmarked treatment to future work.
 
 \section{Scope and anticipated questions}\label{sec:discussion}
 
@@ -1197,8 +1209,9 @@ poorly-separable graph-Laplacian flow such as communication routing
 meshes and roads, where direct factorization wins; returns the cut, dual, and parametric curve on
 max-flow without competing on the bare value (\S\ref{sec:maxflow}); and makes no speed claim on
 DC-OPF, a motivating application only (\S\ref{sec:outofscope}). The formulation \eqref{eq:master}
-itself is classical; the contribution is the unification, the frozen-linearization $\Om$ solver, and
-the empirical demonstration (\S\ref{sec:priorwork}).
+itself is classical---the monotropic-programming optimality system~\cite{rockafellar-monotropic}; the
+contribution is the unification, the frozen-linearization $\Om$ solver, and the empirical demonstration
+(\S\ref{sec:priorwork}).
 
 \emph{Why only a single source--sink demand?} This feasibility study establishes the two load-bearing
 claims---that the (undirected) equilibrium is exactly \eqref{eq:master}, and that an $\Om$ inner solve
@@ -1299,8 +1312,9 @@ partitioning, graph sparsification, and solving linear systems}, SIAM J.\ Comput
 \bibitem{koutis-cmg} I.~Koutis, G.~L.~Miller, and D.~Tolliver, \emph{Combinatorial preconditioners and
 multilevel solvers for problems in computer vision and image processing}, Comput.\ Vis.\ Image
 Underst.\ \textbf{115}(12), 1638--1646, 2011.
-\bibitem{bindel-amg-pf} K.~Lee, H.~Wang, and D.~Bindel, \emph{A nonlinear algebraic multigrid framework
-for the power flow equations}, SIAM J.\ Sci.\ Comput.\ \textbf{41}(3), B812--B833, 2019.
+\bibitem{bindel-amg-pf} C.~Ponce, D.~S.~Bindel, and P.~S.~Vassilevski, \emph{A nonlinear algebraic
+multigrid framework for the power flow equations}, SIAM J.\ Sci.\ Comput.\ \textbf{40}(3), B812--B833,
+2018.
 \bibitem{lamgplus} O.~E.~Livne, \emph{LAMG+: A Robust Lean Algebraic Multigrid Solver for Graph
 Laplacians}, arXiv:2606.24791, 2026; code at \url{https://github.com/orenlivne/lamgplus}.
 \bibitem{beckmann} M.~Beckmann, C.~B.~McGuire, and C.~B.~Winsten, \emph{Studies in the Economics of
@@ -1372,5 +1386,9 @@ Transportation Sci.\ \textbf{36}(4), 398--417, 2002.
 Transportation Res.\ Part B \textbf{44}(8--9), 1022--1046, 2010.
 \bibitem{essid-solomon} M.~Essid and J.~Solomon, \emph{Quadratically regularized optimal transport on
 graphs}, SIAM J.\ Sci.\ Comput.\ \textbf{40}(4), A1961--A1986, 2018.
+\bibitem{tobin-friesz} R.~L.~Tobin and T.~L.~Friesz, \emph{Sensitivity analysis for equilibrium network
+flow}, Transportation Sci.\ \textbf{22}(4), 242--250, 1988.
+\bibitem{rockafellar-monotropic} R.~T.~Rockafellar, \emph{Network Flows and Monotropic Optimization},
+Wiley, 1984 (reprinted Athena Scientific, 1998).
 \end{thebibliography}
 \end{document}
