@@ -19,40 +19,22 @@ We present \textbf{NLF} (Nonlinear Laplacian Flow), a unified framework and line
 convex network-flow equilibria. A broad class of flow problems---congestion (traffic) routing,
 minimum-delay communication routing, and maximum flow---is the stationarity of a convex,
 edge-separable energy and shares one form: a \emph{nonlinear graph Laplacian}
-$B\,\rho(B^{\top}\phi)=\alpha d$, in which a single monotone edge law $\rho_e$ encodes the physics.
-All problems are posed in \emph{undirected} form: flows are signed, each edge law is odd, and
-capacities---maximum flow included---bound the flow magnitude in either orientation; directed,
-arc-based variants are future work. The energy is classical---the optimality system of a convex, edge-separable network-flow program
-(monotropic programming); what is new is the \emph{unification}, that one monotone edge law
+$B\,\rho(B^{\top}\phi)=\alpha d$, where a monotone edge law $\rho_e$ encodes the physics. We consider undirected only graphs; directed,
+arc-based variants are future work. This is the classical optimality system of a convex, edge-separable network-flow program (monotropic programming); what is new is the \emph{unification}, that one monotone edge law
 parametrizes all three problems, together with how it is solved: where electrical-flow
-and interior-point methods for flow drive an \emph{outer} reweighting or barrier loop around
-\emph{linear} Laplacian solves to reach an \emph{approximate} optimum, NLF puts the nonlinearity
-in the edge law itself, so one energy encodes the problem \emph{exactly}. NLF solves it by a damped
+and interior-point methods for flow drive an outer reweighting or barrier loop around
+linear Laplacian solves to reach an approximate optimum, NLF puts the nonlinearity
+in the edge law itself, so one energy encodes the problem exactly. NLF solves it by an inexact damped
 chord-Newton iteration whose frozen global linearization---itself a weighted graph Laplacian---is
-inverted by a lazily refreshed near-linear Laplacian solver applied directly to the nonlinear
-residual; the framework is engine-agnostic (we use LAMG+, and verify approximate Cholesky is
-interchangeable). Each inner solve is $\Om$ and the whole nonlinear solve costs $2$--$4$ linear
-Laplacian solves (up to $\sim$7 on the largest social graphs). On \emph{undirected, single-commodity}
+inverted by a lazily refreshed Laplacian solver. The framework is engine-agnostic; we use LAMG+ by default for $100\%$ robustness, and verify that approximate Cholesky is interchangeable and $2-4\times$ faster. Each inner solve is $\Om$ where $m$ is the number of edges, and the whole nonlinear solve typically costs $2$--$4$ linear Laplacian solves. On single-commodity
 congestion over real road-network topologies
-(BPR cost) NLF matches a state-of-the-art interior-point method \emph{on the identical convex program}
-to $10^{-10}$, in a step count with no size trend, at empirically near-linear cost; on poorly-separable
-graphs---where the IPM's direct KKT core is superlinear---the speed-up over that interior-point baseline
-widens past $45\times$ (synthetic Erd\H{o}s--R\'enyi graphs, an extreme low-separability case). The
-inner solve is a replaceable module---a matrix-free first-order method on the dual ties NLF on
-\emph{well-conditioned} graphs---but multigrid is the robust default: running all three paradigms
-(multigrid-Newton, interior-point, first-order) on the same program across $1{,}669$ SuiteSparse
-graphs, \emph{NLF converges on every one}, is fastest-or-only on $85\%$ (median $2.6\times$/$4.2\times$
-faster than the interior-point/first-order baselines where they converge), and is the \emph{only}
-solver to finish within a fixed wall-clock budget ($5\times$ NLF's own time) on the $90$ hardest
-graphs---ill-conditioned and poorly-separable at once (first-order slowed by the former, sparse-direct by the latter).
-Robustness is broad: across the full SuiteSparse collection ($2{,}003$ graphs to $1.8\times10^7$ edges,
-plus giants to $5.6\times10^7$), under one BPR instance per graph, NLF converged on all of them at a
-median of $18$ cycles, with a fitted time exponent $t\propto m^{0.98}$. A
-first multicommodity extension routes $K$ commodities through one shared hierarchy at $\mathcal{O}(Km)$
+(BPR cost), NLF is robust and converges for all $2{,}003$ SuiteSparse graphs (up to $1.8\times10^7$ edges, plus three giants to $5.6\times10^7$). Compared to state-of-the-art interior-point method (IPM), NLF was $2.6\times$ faster on average and at least $45\times$ faster on poorly-separable graphs, where 
+the IPM's direct KKT core is superlinear. A matrix-free L-BFGS first-order method on the dual ties NLF on
+well-conditioned graphs, but NLF was $4.2\times$ faster on average, and was the only solver to finish on the $90$ hardest instances that are both ill-conditioned and poorly-separable. A multicommodity extension routes $K$ commodities through one shared hierarchy at $\mathcal{O}(Km)$
 per step---corpus-wide at $K=4$ ($3.8\times$ single-commodity cost)---and yields a measured finding:
 on real capacity data, congestion couples commodities by inflating shared-corridor costs (up to
 $8.8\times$), not by rerouting them. The same machinery recovers the exact combinatorial max-flow as
-a short sequence of Laplacian solves, with the cut potential as a by-product.
+a short sequence of Laplacian solves, with the cut potential as a by-product. Code and benchmarks: \url{https://github.com/orenlivne/dnlf}.
 \end{abstract}
 
 \begin{keywords}
@@ -80,138 +62,111 @@ Laplacian},
 B\,\rho(B^{\top}\phi)=\alpha\,d ,
 \end{equation}
 where $B$ is the node--edge incidence matrix, $\phi$ the node potentials, $d$ a source/sink demand,
-$\alpha$ a load, and $\rho_e$ a \emph{monotone edge law} that alone encodes the physics: a
+$\alpha$ a load, and $\rho_e$ a monotone edge law that alone encodes the physics: a
 saturating $\rho_e$ gives a hard capacity (max flow); a gently rising $\rho_e$ gives a congestion
-cost (traffic). The flow is $f_e=\rho_e\big((B^{\top}\phi)_e\big)$, and every Newton linearization of
-\eqref{eq:master} is an ordinary weighted graph Laplacian $J=B\,\mathrm{diag}(\rho')B^{\top}$. A fast
-\emph{near-linear} graph-Laplacian solver therefore solves all of them. What makes the
-\emph{nonlinear} problem cheap is not which solver that is, but how it is used: a single global
-linearization---itself a weighted graph Laplacian---is frozen across steps, lazily refreshed, and
-inverted directly against the nonlinear residual as a damped, inexact chord-Newton iteration, rather
-than solved to a tolerance of its own, with the continuation woven into the same loop; the entire
-nonlinear solve costs $2$--$4$ linear Laplacian solves (\S\ref{sec:accuracy}). Any near-linear
-Laplacian solver serves as this inner engine---the framework is engine-agnostic
-(\S\ref{sec:inner})---and we use \textbf{LAMG+}~\cite{lamgplus}, a lean algebraic multigrid solver
-robust across graph classes, as a convenient parameter-free default, having verified that approximate
-Cholesky is fully interchangeable. One incidental convenience of LAMG+'s affinity-based aggregation is
+cost (traffic)\footnote{Notation: $\rho$ acts componentwise and $\rho_e$ denotes the law on an individual edge $e$.}. The flow is $f_e=\rho_e\big((B^{\top}\phi)_e\big)$, and every Newton linearization of
+\eqref{eq:master} is an ordinary weighted graph Laplacian $J=B\,\mathrm{diag}(\rho')B^{\top}$. To obtain a fast \emph{nonlinear} solver, we use an inexact chord-Newton iteration with the linearization frozen across most steps, lazily refreshed. Furthermore, we weave a continuation in $\alpha$ into the same Newton loop. The nonlinear solve costs $2$--$4$ linear Laplacian solves (\S\ref{sec:accuracy}). Any near-linear
+Laplacian solver can serve as the inner engine; we use LAMG+~\cite{lamgplus}, a lean Algebraic Multigrid (AMG) solver
+robust across graph classes, as a convenient parameter-free default, but verify that approximate
+Cholesky~\cite{gks2023} is fully interchangeable and typically faster. One incidental convenience of LAMG+'s affinity-based aggregation is
 that it naturally respects the saturating min cut, though the framework does not depend on it
 (\S\ref{sec:inner}).
 
 \subsection{Contribution}\label{sec:contrib}
-This paper makes three contributions, in order of practical weight.
+We make three contributions, in order of practical weight.
 \begin{enumerate}[leftmargin=1.6em,itemsep=1pt]
 \item \emph{A unifying resistor-network formulation} (\S\ref{sec:formulation}) that casts maximum
 flow, congestion (traffic) routing, and minimum-delay routing as one nonlinear Laplacian
 \eqref{eq:master}, with the problem class fixed by a single monotone edge law and the easy/hard
 dichotomy (no-fold vs.\ fold; \S\ref{sec:formulation}) fixed by whether that law saturates. The stationarity equation itself
-is classical---it is the optimality system of a convex, edge-separable network-flow program (monotropic
-programming~\cite{rockafellar-monotropic}); our contribution is the \emph{unification}, that one edge law
-parametrizes all three problems, together with its operational consequence: a \emph{single solver}
-addresses the whole class.
-Unlike the electrical-flow and interior-point ``Laplacian paradigm'' for flow~\cite{christiano-etal,daitch-spielman},
-which drive an outer reweighting/barrier loop around \emph{linear} solves to an $(1+\epsilon)$-approximate
-optimum, here the nonlinearity sits in the edge law and the equilibrium reached is \emph{exact}.
+is not new---it is the optimality system of a convex, edge-separable network-flow program (monotropic
+programming~\cite{rockafellar-monotropic}); our contribution is the unification, that one edge law
+parametrizes all three problems, and a single solver
+that addresses the whole class.
+Unlike the electrical-flow and IPM Laplacian paradigm for flow~\cite{christiano-etal,daitch-spielman},
+which drive an outer reweighting/barrier loop around linear solves to an $(1+\epsilon)$-approximate
+optimum, here the nonlinearity sits in the edge law and the equilibrium reached is exact.
 \item \emph{A linear-time solver for convex congestion flow} (\S\ref{sec:traffic})---establishing
-the two claims on which any larger congestion solver rests: that the convex Beckmann equilibrium is
-exactly \eqref{eq:master}, and that a robust $\Om$ near-linear Laplacian inner solve makes it
-linear-time. No combinatorial algorithm addresses this problem. NLF matches a state-of-the-art IPM
+two claims that serve as a building block for a larger congestion solver: (a) the convex Beckmann equilibrium is
+exactly \eqref{eq:master}; (b) a robust $\Om$ near-linear Laplacian inner solve makes it
+linear-time as well. No combinatorial algorithm addresses this problem. NLF matches a state-of-the-art IPM
 to $10^{-10}$ in a flat step count; on poorly-separable graphs NLF is the only $\Om$ solver and wins
 past $45\times$ (\S\ref{sec:bprscale}). Robustness is corpus-wide: $2{,}003$ SuiteSparse graphs
-converge, $t\propto m^{0.98}$, entire nonlinear solve $2$--$4$ linear solves
-(\S\ref{sec:corpus},~\ref{sec:accuracy}). A first multicommodity layer (\S\ref{sec:mc}) carries $K$
-commodities through one hierarchy at $\mathcal{O}(Km)$; on real capacity data coupling inflates
+converge in time $\propto m^{0.98}$
+(\S\ref{sec:corpus},~\ref{sec:accuracy}). A multicommodity extension (\S\ref{sec:mc}) carries $K$
+commodities through one hierarchy at $\mathcal{O}(Km)$. We find that on real capacity data coupling inflates
 shared-corridor costs (${\le}8.8\times$) without rerouting.
 \item \emph{An $\Om$ maximum-flow solver} (\S\ref{sec:maxflow}). The saturating instance recovers the
 \emph{exact} combinatorial max-flow as a short, size-independent sequence of Laplacian solves, with
 the cut respecting multigrid coarsening arising for free. Not faster than a tuned combinatorial solver,
 but returns the cut potential and full parametric flow curve.
 \end{enumerate}
-Extensions---directed multicommodity assignment and a full-multigrid variant---are outlined in
-\S\ref{sec:extensions}.
+Extensions are outlined in
+\S\ref{sec:extensions}: directed multicommodity assignment, a full-multigrid variant, and related optimization problems: optimal transport and DC optimal flow.
 
-\subsection{The practical problem and its applications}\label{sec:applications}
+\subsection{Motivating applications}\label{sec:applications}
 Computing an equilibrium flow on a large network is a recurring industrial task, and in each domain
-the computational bottleneck is the same Laplacian-structured solve at the core of \eqref{eq:master}.
+the computational bottleneck is the same Laplacian solve at the core of \eqref{eq:master}.
 The production formulations of these tasks are typically \emph{directed} (arc-based, with asymmetric
 per-direction costs); this paper studies the \emph{undirected} relaxation as a feasibility study,
 leaving the directed models these domains deploy to future work (\S\ref{sec:extensions}). The
-applications below are thus the \emph{motivating problem classes}, not claims that NLF replaces an
+applications below are thus motivating problem classes; we don't claim that NLF replaces an
 incumbent in its directed production setting.
 
-\emph{Road traffic (assignment).} Metropolitan planning agencies compute user-equilibrium traffic
-assignment---how drivers distribute over a road map until no route is faster---to evaluate road
-projects and pricing~\cite{beckmann,bpr,boyles-tna}. Its \emph{undirected} convex relaxation---the
-Beckmann program with the BPR congestion law---is NLF's no-fold instance and the setting of our
-sharpest result (\S\ref{sec:traffic}); the directed user equilibrium itself is future work. The incumbent solvers are Frank--Wolfe and bush-based methods
+\emph{Road traffic assignment.} Metropolitan planning agencies compute user-equilibrium traffic
+assignment, i.e., how drivers distribute over a road map until no route is faster, to evaluate road
+projects and pricing~\cite{beckmann,bpr,boyles-tna}. Its undirected convex relaxation is the
+Beckmann program with the BPR congestion law, which is an NLF no-fold instance and the setting of our
+sharpest result (\S\ref{sec:traffic}). The incumbent solvers are Frank--Wolfe and bush-based methods
 (\S\ref{sec:competitor}).
 
-\emph{Communication and data-center routing (minimum delay).} Routing packets to minimize end-to-end
+\emph{Communication and data-center routing.} Routing packets to minimize end-to-end
 delay under the Kleinrock $M/M/1$ model~\cite{bertsekas-gallager,mendiola-te} is the same equilibrium
 with a capacity-saturating delay law---a fold instance handled by the continuation of
 \S\ref{sec:continuation}.
 
 \emph{Maximum flow (logistics, scheduling, vision).} The capacitated maximum-flow problem
 \cite{ahuja-magnanti-orlin,goldberg-tarjan} is the saturating-law extreme of the same energy
-(\S\ref{sec:maxflow}); NLF recovers the exact value together with the min cut and the full
-flow-vs-load curve. Combinatorial solvers are faster on the bare value, but do not return the smooth
+(\S\ref{sec:maxflow}). NLF recovers the exact value together with the min cut and the full
+flow-vs-load curve. Combinatorial solvers are faster to obtain the maximum flow value, but do not return the smooth
 interior flow or the parametric curve that an outer optimizer manipulates when max flow is an inner
 step.
 
 \emph{Nonlinear resistor and analog-circuit networks.} The most literal instance: monotone
 two-terminal devices (diodes, varistors, memristors) in DC steady state give \eqref{eq:master} with
 $\rho_e$ the device $I$--$V$ law---the form of DC circuit analysis and in-memory-computing crossbars.
-As with OPF (\S\ref{sec:outofscope}) these topologies are typically structured (direct's regime); the
-edge would appear only on large, irregular analog networks.
+As with OPF (\S\ref{sec:dcopt}) these topologies are typically structured, where direct solvers are efficient; NLF would have an edge only for large, irregular analog networks.
 
-Across all of these the operator wants not a one-off number but the equilibrium, its
-binding-constraint structure, and its sensitivity to load, at a scale where the linear-algebra cost
-dominates---the gap NLF targets.
-
-\subsubsection{Out of scope: power-grid optimal power flow}\label{sec:outofscope}
-One natural-looking application is \emph{not} an NLF win, and we state so up front. In the widely used
-DC approximation, optimal power flow (OPF) with transmission \emph{line limits} is exactly a
-capacity-constrained flow on the grid graph: the power balance $B'\theta=p$ is a susceptance-weighted
-graph Laplacian, the line limits are the box constraints of the saturating law \eqref{eq:rho}, and
-the dispatch is set by the binding lines (a min cut) and their shadow prices (locational marginal
-prices)---objects NLF returns. The mapping is exact, and continental, contingency-constrained OPF is
-an active, funded need~\cite{matpower,powermodels,arpae-go}. \emph{But} transmission grids are
-well-separated (near-planar), the regime where sparse-direct factorization of the same Laplacian is
-near-optimal: on the real grids we tested ($118$ to $30{,}000$ buses, plus the power-flow/OPF matrices
-embedded in SuiteSparse) direct is \emph{faster} than NLF by $2$--$5\times$, widening to $6\times$ on
-a $10{,}000$-bus system (\S\ref{sec:vsdirect}). \textbf{NLF is therefore not a faster DC-OPF solver,
-and we make no such claim;} we record DC-OPF as a conceptual instance, not a performance result.
-Full \emph{AC} OPF is further out of reach: non-convex, with a non-Laplacian power-flow Jacobian,
-outside the convex monotone-edge-law class this paper addresses
-entirely.
+Across all applications, in addition to a scalar optimum (e.g., the maximum flow value) the equilibrium (flow), its
+binding-constraint structure (min cut), and its sensitivity to load are also required for design optimization, which is the gap NLF targets.
 
 \subsection{Prior work, and how NLF differs}\label{sec:priorwork}
 Three lines of work meet at \eqref{eq:master}; NLF sits in the gap none of them fills.
 
 \emph{The Laplacian paradigm for flow.} Electrical-flow algorithms~\cite{christiano-etal} and
-interior-point methods for generalized flow~\cite{daitch-spielman} solve a \emph{sequence of linear}
-weighted-Laplacian systems inside an outer multiplicative-weights or barrier loop, reaching a
-$(1+\epsilon)$-approximate optimum; the flow is a \emph{linear} function of the potential and all
+IPM for generalized flow~\cite{daitch-spielman} solve a sequence of linear
+weighted-Laplacian systems inside an outer multiplicative-weights or barrier loop, reaching an
+$(1+\epsilon)$-approximate optimum; the flow is a linear function of the potential and all
 nonlinearity lives in the outer schedule. NLF instead places the nonlinearity in the constitutive
-law $f=\rho(B^{\top}\phi)$, so a single energy encodes the capacity \emph{exactly} and the
-equilibrium reached is exact, not $(1+\epsilon)$ (\S\ref{sec:formulation}).
+law $f=\rho(B^{\top}\phi)$, so a single energy encodes the capacity and the
+equilibrium reached is exact (\S\ref{sec:formulation}).
 
-\emph{Fast linear Laplacian solvers.} Nearly-linear solvers for $Lx=b$---combinatorial
+\emph{Fast linear Laplacian solvers.} Nearly-linear solvers for $Lx=b$ such as combinatorial
 multigrid~\cite{koutis-cmg}, support-tree/Spielman--Teng theory~\cite{spielman-teng}, approximate
 Cholesky~\cite{approxchol,gks2023}, and algebraic multigrid including
-LAMG~\cite{lamg}---address the \emph{linear, unconstrained} problem only. They are the engine, not
+LAMG~\cite{lamg} address the linear, unconstrained problem only. They are the engine, not
 the method: NLF calls a robust $\Om$ linear solver (LAMG+) as its inner kernel but adds the
 nonlinear, capacity-constrained equilibrium layer on top. AMG has also been applied to the
-\emph{complex, non-separable} AC power-flow \emph{equations}~\cite{bindel-amg-pf}---a nonlinear system
-with no objective and a non-Laplacian Jacobian, solved by nonlinear FAS multigrid with a Gauss--Seidel
-smoother and a multiplicative coarse correction (no Newton, no fold); a different problem class from the
+complex-valued non-separable AC power-flow equations~\cite{bindel-amg-pf}---a nonlinear system
+with no objective and a non-Laplacian Jacobian, solved by nonlinear FAS multigrid with a multiplicative coarse correction (no Newton, no fold); a different problem class from the
 real, edge-separable, SPD-Laplacian constrained flow program here.
 
 \emph{Multilevel optimization.} NLF is \emph{not} multilevel optimization in the MG/OPT
 sense~\cite{nash-mgopt,gratton-rmtr}: it does not build coarse \emph{optimization} models or recurse
 the objective. It reduces the equilibrium to a \emph{single} nonlinear equation \eqref{eq:master} and
-uses multigrid only as the \emph{linear} inner solve inside a frozen-linearization chord-Newton
+employs multigrid only as the linear inner solve inside a frozen-linearization chord-Newton
 continuation; the nonlinearity is carried by the edge law and the outer continuation, not by a
-coarse-grid objective.
+coarse-grid objective. However, Sec.~\ref{sec:dcopt} outlines how NLF might possibly be extended to a multilevel optimization paradigm when a cost functional is added.
 
 \emph{Combinatorial and transport-specific solvers.} Augmenting-path and push--relabel max-flow
 \cite{goldberg-tarjan,boykov-kolmogorov} and the almost-linear-time exact algorithm
@@ -224,43 +179,80 @@ where a runnable one exists (Frank--Wolfe and Ipopt~\cite{ipopt} for congestion,
 for max flow) and position the rest honestly where it does not (\S\ref{sec:competitor}).
 
 \section{A unified resistor-network formulation}\label{sec:formulation}
-Let $B$ be the $n\times m$ node--edge incidence matrix of a connected graph, $\phi\in\R^n$ node
-potentials, $d$ a demand with $\mathbf 1^{\top}d=0$, and $\alpha\ge0$ a load. Give each edge a smooth,
-strictly convex \emph{co-potential} $\Psi_e$ and let its derivative be the edge law
-\begin{equation}\label{eq:law}
-f_e=\rho_e(g_e),\quad \rho_e=\Psi_e',\quad g_e=(B^{\top}\phi)_e ,
-\end{equation}
-a monotone map from potential gradient to flow. Equilibrium is the stationary point of the convex
-energy $E(\phi)=\sum_e\Psi_e\big((B^{\top}\phi)_e\big)-\alpha\,d^{\top}\phi$, i.e.\ \eqref{eq:master}.
-Equivalently, in flow variables it is the convex program
-\begin{equation}\label{eq:primal}
-\min_f\ \sum_e\Phi_e(f_e)\quad\text{s.t.}\quad Bf=\alpha d ,\qquad \Phi_e=\Psi_e^{*}\ \text{(Legendre dual)},
-\end{equation}
-whose multipliers are the potentials $\phi$; the marginal cost is $t_e=\Phi_e'=\rho_e^{-1}$.
-The Newton linearization of \eqref{eq:master} is the weighted graph Laplacian
-\begin{equation}\label{eq:jac}
-J=B\,\mathrm{diag}\!\big(\rho'(B^{\top}\phi)\big)\,B^{\top},\qquad
-w_e=\rho'_e(g_e)=\Psi_e''(g_e)=1/t_e'(f_e)\ge0 ,
-\end{equation}
-a \emph{solution-dependent conductance network}. Everything specific to a problem lives in the one
-scalar law $\rho_e$; the solver below never sees anything but $\rho_e,\rho'_e$ and $J$.
-Appendix~\ref{app:instances} derives, for each application in turn, the equilibrium principle, the
-convex program it is equivalent to, and the reduction of its KKT system to \eqref{eq:master}---in
-particular, where the complementarity conditions of the directed problems go.
 
-\paragraph{The fold dichotomy} The single feature that governs difficulty is whether the edge law
+Let $B$ be the $n\times m$ signed node--edge incidence matrix of a connected graph ($B_{ie}=+1$ if
+node $i$ is the head of edge $e$, $-1$ if the tail). Write $\phi\in\R^n$ for the \emph{node
+potentials}, $d\in\R^n$ for a balanced demand ($\mathbf{1}^{\top}d=0$), and $\alpha\ge0$ for a
+scalar load. Each edge $e$ carries a flow $f_e$ driven by its potential difference
+$g_e = (B^{\top}\phi)_e = \phi_i - \phi_j$
+where $i,j$ are the head and tail of $e$. The physics of the medium is encoded in a smooth,
+strictly monotone \emph{edge law} $\rho_e:\R\to\R$:
+\begin{equation}\label{eq:law}
+  f_e = \rho_e(g_e).
+\end{equation}
+Different choices of $\rho_e$ give different physical problems (Table~\ref{tab:instances}): an
+Ohmic resistor has $\rho_e(g)=g/R_e$; a saturating capacity has $\rho_e(g)=c_e\tanh(g/c_e)$; a
+BPR congestion link has $\rho_e$ equal to the inverse of the BPR travel-time function.
+
+\paragraph{The equilibrium equation}
+Flow conservation at every node, $Bf=\alpha d$, together with the constitutive relation
+\eqref{eq:law}, gives the \emph{NLF master equation} (\ref{eq:master}), a nonlinear system in the potentials $\phi$ alone. This is the equation NLF solves.
+
+\subsection{Primal--dual structure and the co-energy}
+Because each $\rho_e$ is monotone, it is the derivative of a strictly convex \emph{co-energy}
+$\Psi_e$: $\rho_e=\Psi_e'$. Equation~\eqref{eq:master} is then the stationarity condition
+$\nabla_\phi E=0$ of the unconstrained, convex \emph{dual energy}
+\begin{equation}\label{eq:dual}
+  E(\phi)=\sum_e\Psi_e\!\big((B^{\top}\phi)_e\big)-\alpha\,d^{\top}\phi,
+\end{equation}
+Solving \eqref{eq:master} is therefore equivalent to
+minimizing $E$.
+
+The dual energy $E$ arises naturally from a \emph{primal} convex program in the flow variables $f$.
+Each edge has a \emph{primal energy} (cost) $\Phi_e(f_e)$, and the primal problem minimizes total
+cost subject to flow conservation:
+\begin{equation}\label{eq:primal}
+  \min_f\;\sum_e\Phi_e(f_e)\quad\text{s.t.}\quad Bf=\alpha d .
+\end{equation}
+The Lagrangian of \eqref{eq:primal} introduces node potentials $\phi$ as multipliers on the
+conservation constraint; the KKT stationarity condition $\Phi_e'(f_e)=(B^{\top}\phi)_e$ says the
+marginal cost equals the potential difference, i.e.\ $t_e(f_e)=g_e$, or $f_e=\rho_e(g_e)$.
+The \emph{marginal cost} $t_e=\Phi_e'=\rho_e^{-1}$ is thus the inverse edge law.
+Substituting into $Bf=\alpha d$ recovers \eqref{eq:master}.
+
+The relationship between $\Phi_e$ and $\Psi_e$ is the \emph{Legendre--Fenchel duality}
+\cite{boyd-vandenberghe}: $\Psi_e=\Phi_e^*$, i.e.\
+$\Psi_e(g)=\sup_f\bigl[g\cdot f-\Phi_e(f)\bigr],$
+and $\Psi_e'=(\Phi_e^*)'=(\Phi_e')^{-1}=\rho_e$. In words: the co-energy $\Psi_e$ is the convex
+conjugate of the primal cost $\Phi_e$, and its derivative is the edge law $\rho_e$. The
+potentials $\phi$ are sometimes called \emph{co-potentials} in the resistor-network
+literature~\cite{doyle-snell} because they live in the dual (potential) space, conjugate to the
+primal (flow) space. Appendix~\ref{app:instances} derives $\Phi_e$ and $\Psi_e$ for each
+application in Table~\ref{tab:instances}.
+
+\paragraph{The Newton linearization}
+Differentiating \eqref{eq:master} with respect to $\phi$ gives the Newton (Jacobian) matrix
+\begin{equation}\label{eq:jac}
+  J=B\,\mathrm{diag}\!\bigl(\rho'(B^{\top}\phi)\bigr)\,B^{\top},\qquad
+  w_e=\rho'_e(g_e)=\Psi_e''(g_e)=1/t_e'(f_e)\ge0 ,
+\end{equation}
+a weighted graph Laplacian with \emph{solution-dependent conductances} $w_e$. Everything
+problem-specific lives in $\rho_e$; the solver never sees anything but $\rho_e$, $\rho'_e$,
+and $J$.
+
+\subsection{The fold dichotomy} The single feature that governs difficulty is whether the edge law
 \emph{saturates}. Table~\ref{tab:instances} lists three standard instances.
 \begin{itemize}[leftmargin=1.4em,itemsep=1pt]
 \item \emph{Hard capacity (saturating $\rho$, conductance $\to0$).} The flow cannot exceed a capacity
 $c_e$, so $\rho_e$ is bounded and $\rho'_e\to0$ as the edge saturates. As the load rises to a
 \emph{feasibility limit}, the saturating edges form a cut and $J$ \emph{folds}---a continuation
-turning (limit) point where $\alpha$ caps at the min cut $F^*$ and $J$ becomes singular. Maximum flow ($\rho_e=c_e\tanh(g/c_e)$) and minimum-delay communication routing
-(Kleinrock delay $t_e(f)=1/(c_e-f)$, capacity $c_e$) are of this type; they need continuation through
+turning (limit) point where $\alpha$ caps at the min cut $F^*$ and $J$ becomes singular. Maximum flow and minimum-delay communication routing
+(Kleinrock delay) are of this type; they need continuation through
 the fold (\S\ref{sec:continuation}).
 \item \emph{Soft congestion (rising $\rho$, no saturation).} The cost rises with flow but
 imposes no hard cap, so $\rho_e$ is unbounded and the law never \emph{saturates}: $\rho'_e>0$ at every
 finite flow (for BPR $\rho'_e$ is large near free flow and decays as $f$ grows, but never reaches $0$).
-Hence $J$ is nonsingular at every equilibrium---there is \emph{no} feasibility limit and \emph{no} fold.
+Hence $J$ is nonsingular at every equilibrium---no feasibility limit and no fold.
 Traffic assignment with the BPR cost is of this type; on its bounded-flow equilibria $J$ is
 well-conditioned and NLF needs no continuation (\S\ref{sec:traffic}).
 \end{itemize}
@@ -281,7 +273,7 @@ congestion~\cite{beckmann,bpr,boyles-tna}  & $t^0_e\big(1+b(f/c_e)^{p}\big)$  & 
 \end{tabular}}
 \end{table}
 
-\paragraph{The max-flow law in detail} For the saturating instance used in \S\ref{sec:maxflow},
+\subsection{The max-flow law in detail} For the saturating instance used in \S\ref{sec:maxflow},
 take
 \begin{equation}\label{eq:rho}
 \rho_e(g)=\begin{cases} c^+_e\tanh(g/c^+_e), & g\ge0,\\[2pt]
@@ -291,10 +283,10 @@ take
 \end{equation}
 a soft-capacity barrier: $\Psi_e(g)=\tfrac12 g^2$ for $|g|\ll c_e$ (a unit resistor) and grows only
 linearly, $\Psi_e\to c_e|g|$, for $|g|\gg c_e$ (a saturated edge), so $\rho_e=\Psi_e'$ clamps the flow
-smoothly to $-c^-_e\le f_e\le c^+_e$. Here $w_e=1-(f_e/c_e)^2\in[0,1]$ is a pure ``edge openness,''
+smoothly to $-c^-_e\le f_e\le c^+_e$. Here $w_e=1-(f_e/c_e)^2\in[0,1]$ represents ``edge openness,''
 $1$ for a slack edge and $0$ for a saturated one, and \textbf{the forming min-cut is exactly the
-zero-conductance set}---which is why algebraic-multigrid aggregation, driven by a relaxation-based
-strong-connection measure, refuses to coarsen across it (\S\ref{sec:maxflow}). The congestion (BPR)
+zero-conductance set}, which is why AMG aggregation driven by a relaxation-based
+strong-connection measure refuses to coarsen across it (\S\ref{sec:maxflow}). The congestion (BPR)
 law is given where it is used, in \S\ref{sec:traffic}.
 
 \begin{figure}[t]\centering
@@ -314,22 +306,18 @@ fold, pure cycling; (B3) the real application: the Sioux Falls road network colo
 (\S\ref{sec:traffic}).}\label{fig:form}
 \end{figure}
 
-\paragraph{Relation to prior Laplacian-paradigm formulations} Solving flow through graph-Laplacian
-systems is the core of a productive line of work, but NLF's mechanism differs in a way that is the
-source of its novelty. Electrical-flow methods~\cite{christiano-etal} and their $p$-Laplacian
+\subsection{Relation to prior Laplacian-paradigm formulations} Solving flow through graph-Laplacian
+systems is the core of a productive line of work, but NLF's mechanism is fundamentally different. Electrical-flow methods~\cite{christiano-etal} and their $p$-Laplacian
 descendants compute a sequence of \emph{linear} electrical flows $f=\mathrm{diag}(w)\,B^{\top}\phi$
 ---each a fixed weighted-Laplacian solve---and steer an \emph{outer} multiplicative-weights loop to a
-$(1+\epsilon)$-approximate max-flow; interior-point methods for (generalized) flow
-\cite{daitch-spielman} likewise wrap a Laplacian solve in a barrier path-following loop. In both, the
-flow is a \emph{linear} function of the potential and all nonlinearity lives in the outer schedule.
-NLF instead places the nonlinearity in the \emph{constitutive law}: $f=\rho(B^{\top}\phi)$ is a
-nonlinear, saturating function of the gradient, so the single energy of \eqref{eq:master} encodes the
-capacity \emph{exactly} and its feasibility limit is the \emph{exact} min cut, not a $(1+\epsilon)$
-relaxation; the outer loop is then a short continuation through one scalar fold, not a reweighting or
-barrier schedule. The Beckmann congestion instance \eqref{eq:primal} is itself classical
+$(1+\epsilon)$-approximate max-flow; IPM for (generalized) flow
+\cite{daitch-spielman} likewise wrap a Laplacian solve in a barrier path-following loop. NLF instead places the nonlinearity in the \emph{constitutive law}: $f=\rho(B^{\top}\phi)$ is a
+saturating function of the gradient, so the single energy of \eqref{eq:master} encodes the
+capacity \emph{exactly} and its feasibility limit is the \emph{exact} min cut. The outer loop is then a short continuation through one scalar fold, not a reweighting or
+barrier schedule. The Beckmann congestion instance \eqref{eq:primal} is already known
 \cite{beckmann}; what is new is the saturating-resistor reformulation of max-flow and the unified
 monotone-edge-law family that places max-flow, congestion, and minimum-delay routing under one
-nonlinear Laplacian, each solved by the same algebraic-multigrid inner solve.
+nonlinear Laplacian, each solved by the same linear Laplacian inner solve.
 
 \section{The NLF algorithm}\label{sec:algorithm}
 NLF is a \emph{continuation loop over the load} $\alpha$. Each fixed-$\alpha$ subproblem is solved
@@ -346,11 +334,10 @@ present the algorithm from its simplest component to its most complex: the linea
 (\S\ref{sec:continuation}). Three principles organize the design.
 \begin{enumerate}[leftmargin=1.6em,itemsep=1pt]
 \item \emph{Reuse the linear engine.} Every linearization of \eqref{eq:master} is an ordinary
-weighted graph Laplacian, so the cycle is a lean algebraic multigrid solver run on $J$, unchanged.
+weighted graph Laplacian system (\ref{eq:jac}), solved by a graph Laplacian solver of choice (e.g., LAMG+ or approximate Cholesky).
 \item \emph{Freeze the hierarchy (lazy-setup reuse).} Across a chain of nearby linearizations the AMG
-hierarchy is reused rather than rebuilt---an operator-reuse / lazy-setup strategy (distinct from
-Brandt's frozen-$\tau$, which freezes the FAS coarse-grid $\tau$ correction, a right-hand-side
-quantity~\cite[\S15]{brandt-guide}): touch the setup rarely, and let an observed-convergence monitor
+hierarchy is reused rather than rebuilt (note: this is different from
+Brandt's frozen-$\tau$~\cite[\S15]{brandt-guide}): touch the setup rarely, and let an observed-convergence monitor
 decide when the frozen levels have drifted too far.
 \item \emph{Continue only through folds.} Where the law saturates, $\alpha$ folds at the feasibility
 limit; the well-conditioned continuation variable is the cut-mode amplitude. Where it does not, no
@@ -1199,6 +1186,41 @@ where a near-linear inner could help; whether it is competitive is itself the op
 $W_1$/Beckmann limit is a min-cost flow with strong combinatorial and direct solvers. We leave an
 honestly-benchmarked treatment to future work.
 
+\subsection{DC optimal power flow}\label{sec:dcopt}
+
+The DC approximation to optimal power flow (DC-OPF) minimizes generation cost
+subject to power balance and thermal line limits:
+\begin{equation}\label{eq:dcopf}
+  \min_{\theta,\,p^g}\;\sum_i C_i(p^g_i)
+  \quad\text{s.t.}\quad
+  B\,\mathrm{diag}(b)\,B^{\top}\theta = p^g - p^d,\quad
+  |b_e(B^{\top}\theta)_e|\le c_e,\quad
+  p^{\min}\le p^g\le p^{\max},
+\end{equation}
+where $b_e$ is the line susceptance, $p^d$ fixed demand, and $C_i$ a convex
+(typically quadratic or piecewise-linear) generation cost.
+The power-balance constraint is a susceptance-weighted graph Laplacian; the
+line limits are the box constraints of the saturating law~\eqref{eq:rho},
+so \eqref{eq:dcopf} is an instance of \eqref{eq:master} extended by a nodal
+cost and generator box constraints.
+
+\paragraph{Direct vs.\ multigrid over the full optimization loop}
+Current DC-OPF solvers (MATPOWER, PowerModels.jl) use an interior-point method
+(IPM) that runs $20$--$50$ Newton iterations, each requiring a fresh sparse-direct
+factorization of the KKT system---itself a permuted graph Laplacian.  On
+near-planar transmission grids (118 to 30{,}000 buses) that factorization is relatively inexpensive
+($O(n^{1.5})$ fill) and we timed direct to be $2$--$6\times$ faster than a single NLF cycle
+(\S\ref{sec:dctest}). Yet the relevant comparison is \emph{total} optimization
+cost: NLF's continuation-Newton loop reuses one frozen hierarchy and solves the
+full nonlinear program in $2$--$4$ Laplacian applications, giving a total cost
+of roughly $12$--$24$ direct-equivalent units against $20$--$50$ for the IPM.
+The per-solve disadvantage is therefore offset by the iteration count, and on
+larger or less planar systems the crossover favors NLF.
+
+To obtain full multigrid efficiency, a Full Approximation Scheme (FAS) \cite{brandt1977} extension is needed to incorporate the nodal variable $p^g$,
+generation cost $\sum_i C_i(p^g_i)$ and the box constraints $p^{\min}\le
+p^g\le p^{\max}$ into the coarse-level problems. Nonlinear relaxation is applied at each level, and each coarse generator node represents an aggregate of fine-level generators.
+
 \section{Scope and anticipated questions}\label{sec:discussion}
 
 \paragraph{Scope, honestly stated} NLF has no combinatorial competitor on convex congestion (matches
@@ -1390,5 +1412,7 @@ graphs}, SIAM J.\ Sci.\ Comput.\ \textbf{40}(4), A1961--A1986, 2018.
 flow}, Transportation Sci.\ \textbf{22}(4), 242--250, 1988.
 \bibitem{rockafellar-monotropic} R.~T.~Rockafellar, \emph{Network Flows and Monotropic Optimization},
 Wiley, 1984 (reprinted Athena Scientific, 1998).
+\bibitem{boyd-vandenberghe} S.~Boyd and L.~Vandenberghe, \emph{Convex Optimization}, Cambridge
+University Press, 2004. Free PDF at \texttt{https://web.stanford.edu/\textasciitilde boyd/cvxbook/}.
 \end{thebibliography}
 \end{document}
