@@ -20,15 +20,15 @@ convex network-flow equilibria. A broad class of flow problems---congestion (tra
 minimum-delay communication routing, and maximum flow---is the stationarity of a convex,
 edge-separable energy and shares one form: a \emph{nonlinear graph Laplacian}
 $B\,\rho(B^{\top}\phi)=\alpha d$, where a monotone edge law $\rho_e$ encodes the physics. We consider undirected only graphs; directed,
-arc-based variants are future work. This is the classical optimality system of a convex, edge-separable network-flow program (monotropic programming); what is new is the \emph{unification}, that one monotone edge law
+arc-based variants are future work. This is the standard optimality system of a convex, edge-separable network-flow program; what is new is the \emph{unification}, that one monotone edge law
 parametrizes all three problems, together with how it is solved: where electrical-flow
 and interior-point methods for flow drive an outer reweighting or barrier loop around
 linear Laplacian solves to reach an approximate optimum, NLF puts the nonlinearity
 in the edge law itself, so one energy encodes the problem exactly. NLF solves it by an inexact damped
 chord-Newton iteration whose frozen global linearization---itself a weighted graph Laplacian---is
-inverted by a lazily refreshed Laplacian solver. The framework is engine-agnostic; an ablation over the corpus shows two near-linear solvers both converge on $100\%$ of graphs to the identical equilibrium, so we default to the faster one (approximate Cholesky, a median $1.6\times$ over LAMG+), with LAMG+ interchangeable. Each inner solve is $\Om$ where $m$ is the number of edges, and the whole nonlinear solve typically costs $2$--$4$ linear Laplacian solves. On single-commodity
+inverted by a lazily refreshed Laplacian solver. The framework is engine-agnostic. We default to approximate Cholesky (fastest), with LAMG+ interchangeable. NLF is empirically linear-time: each inner solve is $\Om$ where $m$ is the number of edges, and the whole nonlinear solve typically costs $2$--$4$ linear Laplacian solves. On single-commodity
 congestion over real road-network topologies
-(BPR cost), NLF is robust and converges for all $2{,}003$ SuiteSparse graphs (up to $1.8\times10^7$ edges, plus three giants to $5.6\times10^7$). Compared to state-of-the-art interior-point method (IPM), NLF was $2.6\times$ faster on average and at least $45\times$ faster on poorly-separable graphs, where 
+(BPR cost), NLF is robust and converges for all $2{,}003$ SuiteSparse graphs up to $5.6\times10^7$ edges. Compared to state-of-the-art interior-point method (IPM), NLF was $2.6\times$ faster on average and $>45\times$ faster on poorly-separable graphs, where 
 the IPM's direct KKT core is superlinear. A matrix-free L-BFGS first-order method on the dual ties NLF on
 well-conditioned graphs, but NLF was $4.2\times$ faster on average, and was the only solver to finish on the $90$ hardest instances that are both ill-conditioned and poorly-separable. A multicommodity extension routes $K$ commodities through one shared hierarchy at $\mathcal{O}(Km)$
 per step---corpus-wide at $K=4$ ($3.8\times$ single-commodity cost)---and yields a measured finding:
@@ -162,9 +162,9 @@ with no objective and a non-Laplacian Jacobian, solved by nonlinear FAS multigri
 real, edge-separable, SPD-Laplacian constrained flow program here.
 
 \emph{Multilevel optimization.} NLF is \emph{not} multilevel optimization in the MG/OPT
-sense~\cite{nash-mgopt,gratton-rmtr}: it does not build coarse \emph{optimization} models or recurse
+sense~\cite{nash-mgopt,gratton-rmtr,brandt-ron-mgopt}: it does not build coarse \emph{optimization} models or recurse
 the objective. It reduces the equilibrium to a \emph{single} nonlinear equation \eqref{eq:master} and
-employs multigrid only as the linear inner solve inside a frozen-linearization chord-Newton
+employs multigrid (if LAMG+ is used) only as the linear inner solve inside a frozen-linearization chord-Newton
 continuation; the nonlinearity is carried by the edge law and the outer continuation, not by a
 coarse-grid objective. However, Sec.~\ref{sec:dcopt} outlines how NLF might possibly be extended to a multilevel optimization paradigm when a cost functional is added.
 
@@ -1376,6 +1376,9 @@ Methods}, SIAM Classics in Applied Mathematics \textbf{45}, 2003.
 Optim.\ Methods Softw.\ \textbf{14}(1--2), 99--116, 2000.
 \bibitem{gratton-rmtr} S.~Gratton, A.~Sartenaer, and Ph.~L.~Toint, \emph{Recursive trust-region
 methods for multiscale nonlinear optimization}, SIAM J.\ Optim.\ \textbf{19}(1), 414--444, 2008.
+\bibitem{brandt-ron-mgopt} A.~Brandt and D.~Ron, \emph{Multigrid solvers and multilevel optimization
+strategies}, in \emph{Multilevel Optimization in VLSICAD}, J.~Cong and J.~R.~Shinnerl, eds.,
+Kluwer Academic Publishers, Boston, 2003, pp.~1--69.
 \bibitem{nocedal-wright} J.~Nocedal and S.~J.~Wright, \emph{Numerical Optimization}, 2nd ed.,
 Springer, 2006.
 \bibitem{inexact-newton} R.~S.~Dembo, S.~C.~Eisenstat, and T.~Steihaug, \emph{Inexact Newton methods},
