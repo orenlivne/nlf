@@ -320,29 +320,9 @@ monotone-edge-law family that places max-flow, congestion, and minimum-delay rou
 nonlinear Laplacian, each solved by the same linear Laplacian inner solve.
 
 \section{The NLF algorithm}\label{sec:algorithm}
-NLF is a \emph{continuation loop over the load} $\alpha$. Each fixed-$\alpha$ subproblem is solved
-by a handful of multigrid cycles applied \emph{directly to the nonlinear residual}: a LAMG+
-hierarchy, built once from the linearization $J=B\,\mathrm{diag}(\rho')B^{\top}$ \eqref{eq:jac} at
-some earlier iterate and \emph{frozen} across steps, is cycled against
-$-r(\phi)=\alpha d-B\rho(B^{\top}\phi)$, and the resulting correction is accepted through a line
-search. In classical terms this is a \emph{damped, inexact chord-Newton iteration}: a global
-linearization, frozen---operator and hierarchy alike---across steps and re-formed only when an
-observed-convergence monitor says it has drifted too far, its inverse applied by $\Om$ multigrid
-cycles rather than by an inner solve to a tolerance of its own. We
-present the algorithm from its simplest component to its most complex: the linear engine
-(\S\ref{sec:inner}), the fixed-load solve (\S\ref{sec:fas}), and the continuation through the fold
-(\S\ref{sec:continuation}). Three principles organize the design.
-\begin{enumerate}[leftmargin=1.6em,itemsep=1pt]
-\item \emph{Reuse the linear engine.} Every linearization of \eqref{eq:master} is an ordinary
-weighted graph Laplacian system (\ref{eq:jac}), solved by a graph Laplacian solver of choice (e.g., LAMG+ or approximate Cholesky).
-\item \emph{Freeze the hierarchy (lazy-setup reuse).} Across a chain of nearby linearizations the AMG
-hierarchy is reused rather than rebuilt (note: this is different from
-Brandt's frozen-$\tau$~\cite[\S15]{brandt-guide}): touch the setup rarely, and let an observed-convergence monitor
-decide when the frozen levels have drifted too far.
-\item \emph{Continue only through folds.} Where the law saturates, $\alpha$ folds at the feasibility
-limit; the well-conditioned continuation variable is the cut-mode amplitude. Where it does not, no
-continuation is needed.
-\end{enumerate}
+NLF is a continuation loop over the load $\alpha$, starting at $\alpha = 0$, where each step's solution serves as the initial guess to the next $\alpha$-step. Each fixed-$\alpha$ subproblem is solved by a handful of multigrid cycles (to a tolerance proportional to the current nonlinear residual). The resulting correction is accepted through a line search (damped, inexact chord-Newton iteration). The LAMG+ hierarchy is built once, frozen across $\alpha$-steps and re-formed only when an observed-convergence monitor signals it has drifted too far. The numbers of steps and inner cycles are both bounded, implying empirical-$O(m)$ complexity. Below we describe the linear engine
+(\S\ref{sec:inner}), the fixed-load solve (\S\ref{sec:fas}), and the continuation through a fold
+(\S\ref{sec:continuation}).
 
 \subsection{The inner Laplacian solve}\label{sec:inner}
 The outer loop requires only a near-linear solver for graph Laplacians; the framework is agnostic to
