@@ -26,7 +26,7 @@ and interior-point methods for flow drive an outer reweighting or barrier loop a
 linear Laplacian solves to reach an approximate optimum, NLF puts the nonlinearity
 in the edge law itself, so one energy encodes the problem exactly. NLF solves it by an inexact damped
 chord-Newton iteration whose frozen global linearization---itself a weighted graph Laplacian---is
-inverted by a lazily refreshed Laplacian solver. The framework is engine-agnostic; we use LAMG+ by default for $100\%$ robustness, and verify that approximate Cholesky is interchangeable and $2-4\times$ faster. Each inner solve is $\Om$ where $m$ is the number of edges, and the whole nonlinear solve typically costs $2$--$4$ linear Laplacian solves. On single-commodity
+inverted by a lazily refreshed Laplacian solver. The framework is engine-agnostic; an ablation over the corpus shows two near-linear solvers both converge on $100\%$ of graphs to the identical equilibrium, so we default to the faster one (approximate Cholesky, a median $1.6\times$ over LAMG+), with LAMG+ interchangeable. Each inner solve is $\Om$ where $m$ is the number of edges, and the whole nonlinear solve typically costs $2$--$4$ linear Laplacian solves. On single-commodity
 congestion over real road-network topologies
 (BPR cost), NLF is robust and converges for all $2{,}003$ SuiteSparse graphs (up to $1.8\times10^7$ edges, plus three giants to $5.6\times10^7$). Compared to state-of-the-art interior-point method (IPM), NLF was $2.6\times$ faster on average and at least $45\times$ faster on poorly-separable graphs, where 
 the IPM's direct KKT core is superlinear. A matrix-free L-BFGS first-order method on the dual ties NLF on
@@ -66,11 +66,11 @@ $\alpha$ a load, and $\rho_e$ a monotone edge law that alone encodes the physics
 saturating $\rho_e$ gives a hard capacity (max flow); a gently rising $\rho_e$ gives a congestion
 cost (traffic)\footnote{Notation: $\rho$ acts componentwise and $\rho_e$ denotes the law on an individual edge $e$.}. The flow is $f_e=\rho_e\big((B^{\top}\phi)_e\big)$, and every Newton linearization of
 \eqref{eq:master} is an ordinary weighted graph Laplacian $J=B\,\mathrm{diag}(\rho')B^{\top}$. To obtain a fast \emph{nonlinear} solver, we use an inexact chord-Newton iteration with the linearization frozen across most steps, lazily refreshed. Furthermore, we weave a continuation in $\alpha$ into the same Newton loop. The nonlinear solve costs $2$--$4$ linear Laplacian solves (\S\ref{sec:accuracy}). Any near-linear
-Laplacian solver can serve as the inner engine; we use LAMG+~\cite{lamgplus}, a lean Algebraic Multigrid (AMG) solver
-robust across graph classes, as a convenient parameter-free default, but verify that approximate
-Cholesky~\cite{gks2023} is fully interchangeable and typically faster. One incidental convenience of LAMG+'s affinity-based aggregation is
-that it naturally respects the saturating min cut, though the framework does not depend on it
-(\S\ref{sec:inner}).
+Laplacian solver can serve as the inner engine; we default to approximate Cholesky~\cite{approxchol},
+the faster engine across the corpus at equal robustness (\S\ref{sec:ablation}), with
+LAMG+~\cite{lamgplus} a fully interchangeable alternative. One incidental convenience of LAMG+'s
+affinity-based aggregation is that it naturally respects the saturating min cut, though the framework
+does not depend on it (\S\ref{sec:inner}).
 
 \subsection{Contribution}\label{sec:contrib}
 We make three contributions, in order of practical weight.
@@ -320,81 +320,31 @@ monotone-edge-law family that places max-flow, congestion, and minimum-delay rou
 nonlinear Laplacian, each solved by the same linear Laplacian inner solve.
 
 \section{The NLF algorithm}\label{sec:algorithm}
-NLF is a continuation loop over the load $\alpha$, starting at $\alpha = 0$, where each step's solution serves as the initial guess to the next $\alpha$-step. Each fixed-$\alpha$ subproblem is solved by a handful of multigrid cycles (to a tolerance proportional to the current nonlinear residual). The resulting correction is accepted through a line search (damped, inexact chord-Newton iteration). The LAMG+ hierarchy is built once, frozen across $\alpha$-steps and re-formed only when an observed-convergence monitor signals it has drifted too far. The numbers of steps and inner cycles are both bounded, implying empirical-$O(m)$ complexity. Below we describe the linear engine
+NLF is a continuation loop over the load $\alpha$, starting at $\alpha = 0$, where each step's solution serves as the initial guess to the next $\alpha$-step. Each fixed-$\alpha$ subproblem is solved by a handful of inexact inner solves (each to a tolerance proportional to the current nonlinear residual). The resulting correction is accepted through a line search (damped, inexact chord-Newton iteration). The inner solver's setup---its factor or hierarchy---is built once, frozen across $\alpha$-steps and re-formed only when an observed-convergence monitor signals it has drifted too far. The numbers of steps and inner solves are both bounded, implying empirical-$O(m)$ complexity. Below we describe the linear engine
 (\S\ref{sec:inner}), the fixed-load solve (\S\ref{sec:fas}), and the continuation through a fold
 (\S\ref{sec:continuation}).
 
 \subsection{The inner Laplacian solve}\label{sec:inner}
-The outer loop requires only a near-linear solver for graph Laplacians; the framework is agnostic to
-which one. We use LAMG+ as a convenient, parameter-free default. LAMG+ is a lean caliber-1 aggregation algebraic multigrid solver for graph Laplacians: it aggregates
-nodes by a relaxation-based affinity, bounds the coarse-operator energy by a guard rather than an
-aggregate-size cap, eliminates low-degree nodes by exact Schur complements, and accelerates a
-fractional cycle by min-residual iterate recombination. The companion paper~\cite{lamgplus}
-establishes its two properties we rely on: it solves $L\phi=b$ in
-$\mathcal{O}(m\log(1/\varepsilon))$ work with \emph{no parameter tuning} across $1{,}374$ real-world
-graphs of every class, and on the large poorly-separable graphs---where sparse direct methods
-exhaust memory---it is among the fastest solvers available. The leading alternative near-linear
-graph-Laplacian solvers---approximate Cholesky \cite{gks2023} and Napov--Notay's degree-aware
-aggregation (DRA-QC) \cite{napov-notay}---are equally admissible. The framework is
-\emph{engine-agnostic}: it requires only a near-linear Laplacian solve that does not stall, and any
-of these may be substituted. The formulation and the frozen-Newton/continuation outer method are the
-contribution; the inner solve is a module.
+The outer loop treats the inner solver as a black box and asks three things of it: (i)~it solves a
+graph-Laplacian system $L\phi=b$ in near-linear $\Om$ work; (ii)~its accuracy is tunable, so it can run
+\emph{inexactly} to the forcing tolerance $\eta\|r\|$ of the chord-Newton step (\S\ref{sec:fas}) rather
+than to machine precision; and (iii)~its \emph{setup} is separable from its \emph{solve}, so the setup
+is built once at a frozen linearization and reused---applied to the nonlinear residual---across many
+continuation and Newton steps. The formulation and the frozen-Newton/continuation outer method are the
+contribution; the inner solve is an interchangeable module, and any solver meeting (i)--(iii) is a
+drop-in engine.
 
-\paragraph{The two near-linear inners are interchangeable}
-We verify the engine-agnostic claim directly: holding NLF's outer method fixed (the load-continuation
-chord-Newton of \S\ref{sec:fas}), we swap \emph{only} the inner Laplacian solve between LAMG+ and
-approximate Cholesky~\cite{approxchol}---both $\Om$---on a BPR congestion instance imposed on a
-cross-class subset of the corpus (Table~\ref{tab:innerswap}). The result is modularity, not a winner:
-\emph{both converge on every graph, to the identical equilibrium}---the dual energy
-\eqref{eq:dual} agrees to all printed digits and the link flows to $\le10^{-9}$ relative---so the
-choice of near-linear inner does not affect what NLF computes. Wall-clock differs by a constant only,
-and the two are \emph{peers on balance}---as one expects of two $\Om$ Laplacian solvers
-\cite{lamgplus,approxchol}---with a wide \emph{per-graph} spread in \emph{both} directions. Over a
-$158$-graph cross-class corpus sample both inners converge on \emph{$100\%$} to the identical
-equilibrium (objective to floating-point precision, flows to $\le7\times10^{-9}$); approximate
-Cholesky is faster on $83\%$ of graphs (median $1.8\times$, up to $27\times$) and LAMG+ on the other
-$17\%$ (up to $7.8\times$), with $41\%$ of graphs inside $1.5\times$ either way and an overall median
-of $1.6\times$ (at a mean ${+}4.4$ approxChol outer steps, its rougher inner solve loosening the
-chord-Newton step). The spread is graph-class dependent, not a uniform win for either engine.
-Robustness, then, is \emph{not} a discriminator here---both reach $100\%$---so on this fold-free
-problem the inner is genuinely a free choice; we keep LAMG+ as the reference engine (the companion
-paper's parameter-free solver, benchmarked corpus-wide, \S\ref{sec:corpus}) and report that
-approximate Cholesky is fully interchangeable and, in the median, slightly faster. The one place a
-difference survives is the saturating \emph{fold} (\S\ref{sec:innerfold}), where LAMG+'s
-cut-respecting aggregation yields cleaner inner solves on the near-singular Jacobian---though even
-there the outer continuation reaches the same $F^*$ with either. The \emph{paradigm} question---why a multigrid-class inner rather than a
-sparse-direct or matrix-free first-order solver---is the corpus-wide robustness frontier of
-\S\ref{sec:frontier}; here the point is narrower and cleaner: between the two near-linear engines the
-framework is indifferent.
-
-\begin{table}[t]\centering\small
-\caption{Inner-solver swap inside NLF's BPR congestion solve (no fold): the outer method is fixed and
-only the near-linear inner Laplacian solve changes, LAMG+ vs.\ approximate Cholesky (both $\Om$);
-sparse-direct is shown for reference. Wall-clock seconds and outer (chord-Newton) steps; all run to a
-$10^{-7}$ residual. \emph{Every solver returns the identical equilibrium}---the dual energy agrees to
-the digits shown and the LAMG+/approxChol flows to $\le10^{-9}$ relative ($\Delta f$). $t_{\mathrm{L}}/t_{\mathrm{A}}{>}1$
-means approxChol is faster. Direct wins on small well-separated graphs and loses on the
-poorly-separable ones (\texttt{p2p-Gnutella}, \texttt{as-caida}); its scaling is the separate axis of
-\S\ref{sec:vsdirect}. Representative cross-class subset; the swap script and full output are in the
-released artifact.}\label{tab:innerswap}
-\resizebox{\columnwidth}{!}{%
-\begin{tabular}{llrrrrrrr}
-\toprule
-graph & class & $m$ & energy $E$ & LAMG+ (stp) & approxChol (stp) & direct & $t_{\mathrm{L}}/t_{\mathrm{A}}$ & $\Delta f$\\
-\midrule
-\texttt{3elt}          & 2D mesh     & 13{,}722  & $-0.8939$ & $0.064$ (16) & $0.11$ (21) & $0.023$ & $0.6$ & $4\!\times\!10^{-9}$\\
-\texttt{airfoil1}      & 2D FEM      & 12{,}289  & $-0.9866$ & $0.05$ (18) & $0.015$ (21) & $0.018$ & $3.3$ & $8\!\times\!10^{-10}$\\
-\texttt{bodyy5}        & aniso.\ FEM & 55{,}346  & $-0.9045$ & $0.64$ (18) & $0.074$ (22) & $0.19$  & $8.7$ & $7\!\times\!10^{-10}$\\
-\texttt{bcsstk38}      & structural  & 173{,}714 & $-0.0432$ & $0.23$ (15) & $0.23$ (21)  & $0.20$  & $1.0$ & $2\!\times\!10^{-10}$\\
-\texttt{G2\_circuit}   & circuit     & 288{,}286 & $-1.9134$ & $2.60$ (21) & $0.86$ (24)  & $1.09$  & $3.0$ & $8\!\times\!10^{-11}$\\
-\texttt{fe\_ocean}     & FEM mesh    & 409{,}593 & $-1.0609$ & $3.94$ (18) & $1.00$ (24)  & $3.09$  & $3.9$ & $7\!\times\!10^{-11}$\\
-\texttt{p2p-Gnutella04}& P2P         & 39{,}994  & $-3.1625$ & $0.14$ (24) & $0.080$ (25) & $0.94$  & $1.7$ & $3\!\times\!10^{-11}$\\
-\texttt{as-caida}      & AS/comm     & 53{,}381  & $-6.6601$ & $0.19$ (20) & $0.071$ (23) & $0.33$  & $2.7$ & $2\!\times\!10^{-10}$\\
-\texttt{delaunay\_n16} & planar      & 196{,}575 & $-0.5089$ & $2.47$ (18) & $0.44$ (22)  & $0.58$  & $5.6$ & $6\!\times\!10^{-10}$\\
-\texttt{web-NotreDame} & web         & 1{,}090{,}108 & $-25.957$ & $4.49$ (27) & $3.50$ (29) & $5.56$ & $1.3$ & $3\!\times\!10^{-10}$\\
-\bottomrule
-\end{tabular}}
-\end{table}
+Two public near-linear solvers meet all three with different internals. \emph{Approximate
+Cholesky}~\cite{approxchol} \textbf{sets up} a randomized incomplete sparse-Cholesky factor of
+$L$---a preconditioner, $\Om$ to build---and \textbf{solves} by preconditioned conjugate gradients to
+the requested tolerance. \emph{LAMG+}~\cite{lamgplus} \textbf{sets up} an aggregation-multigrid
+hierarchy (relaxation-based affinity aggregation, low-degree Schur elimination, a guarded coarse
+operator) and \textbf{solves} by a fractional V-cycle with min-residual recombination; its setup and
+per-cycle solve are each $\Om$. In both, setup is the freezable object of requirement (iii) (the
+factor, the hierarchy) and the solve is the tunable object of (ii). We take \textbf{approximate
+Cholesky as the default}: the ablation of \S\ref{sec:ablation} finds it the faster default across the
+corpus at equal robustness. LAMG+ is a drop-in alternative whose hierarchy carries one structural
+advantage at the fold (next paragraph).
 
 What the outer loop freezes and lazily refreshes is the inner Laplacian solve itself---whether a
 multigrid hierarchy or a sparse approximate factorization---applied to the nonlinear residual; the
@@ -402,37 +352,37 @@ choice does not affect convergence (\S\ref{sec:corpus}). One convenient property
 relaxation-based aggregation is that it is \emph{cut-respecting}: as the cut conductances vanish they
 decouple relaxation across the cut, so test vectors decorrelate and the affinity declines to aggregate
 across it; the measured $\mu\approx0.01$ then holds through the continuation (\S\ref{sec:maxflow}), with
-no fold-aware tuning. This is a feature of the default
+no fold-aware tuning. This is a feature of the LAMG+
 engine, not a requirement of the framework: adequate refresh of the frozen operator near the fold
 suffices for \emph{any} inner solver, and over-freezing degrades all of them equally. ($\alpha$, the
 continuation, and the fold never enter the linear solve; the singular cut direction near $F^*$ is
 deflated outside the engine, \S\ref{sec:continuation}.)
 
-\subsection{The fixed-load solve: frozen-hierarchy cycles}\label{sec:fas}
+\subsection{The fixed-load solve: a frozen-setup inner solve}\label{sec:fas}
 The problem at a fixed load $\alpha$ is \eqref{eq:master} itself: find the zero-mean potentials
 $\phi$ with $B\rho(B^{\top}\phi)=\alpha d$, i.e.\ drive the nonlinear residual
 $r(\phi)=\alpha d-B\rho(B^{\top}\phi)$ to zero. NLF solves it by Algorithm~\ref{alg:fixed}. Each
-pass of the loop costs one $\Om$ residual evaluation and one $\Om$ LAMG+ cycle (run inexactly, to
+pass of the loop costs one $\Om$ residual evaluation and one $\Om$ inner solve (run inexactly, to
 the forcing fraction $\eta\|r\|$, $\eta=0.05$~\cite{inexact-newton}); the expensive setup is paid
-only on refresh. The cycle applies an approximate \emph{inverse} of the frozen linearization,
-$\delta\approx J_H^{-1}r$---the (frozen-)Newton direction computed by multigrid. With a fresh
-hierarchy and an exact solve the step would be exactly Newton's; frozen and inexact, it is a
+only on refresh. The inner solve applies an approximate \emph{inverse} of the frozen linearization,
+$\delta\approx J_H^{-1}r$---the (frozen-)Newton direction. With a fresh
+setup and an exact solve the step would be exactly Newton's; frozen and inexact, it is a
 chord-Newton iteration whose linear rate the refresh monitor keeps below $0.25$.
 
 \begin{algorithm}[t]
 \caption{NLF fixed-load solve}
 \label{alg:fixed}
 \begin{algorithmic}[1]
-\Require load $\alpha$; warm start $\phi$; hierarchy state $H$ (shared across calls); relative
+\Require load $\alpha$; warm start $\phi$; inner-solver state $H$ (factor or hierarchy, shared across calls); relative
 residual tolerance $\mathrm{tol}$ (default $10^{-9}$); forcing parameter $\eta$ (default $0.05$)
 \State $r \gets \alpha d - B\rho(B^{\top}\phi)$
 \While{$\|r\| > \mathrm{tol}\cdot\alpha\,\|d\|$}
 \State \textbf{refresh check:} if $H$ is empty, or the previous pass reduced $\|r\|$ by a factor
-worse than $0.25$, or step 5 stalled on a stale $H$, rebuild $H\gets$ LAMG+ setup of
+worse than $0.25$, or step 5 stalled on a stale $H$, rebuild $H\gets$ inner setup of
 $J(\phi)=B\,\mathrm{diag}(\rho'(B^{\top}\phi))B^{\top}$
 \State $\delta \gets$ approximate solution of the frozen correction equation $J_H\,\delta = r$,
 where $J_H=B\,\mathrm{diag}(\rho'(B^{\top}\phi_{\mathrm{build}}))B^{\top}$ is the linearization
-$H$ was built from: LAMG+ cycle(s) on $H$ starting from $\delta=0$, stopped when
+$H$ was built from: inner solve(s) with $H$ starting from $\delta=0$, stopped when
 $\|r - J_H\,\delta\| \le \eta\,\|r\|$
 \State \textbf{line search:} for $\tau=1,\tfrac12,\tfrac14,\dots$ accept the first $\tau$ with
 $\big\|\alpha d - B\rho\big(B^{\top}(\phi+\tau\delta)\big)\big\| \le \|r\|$ and set
@@ -556,7 +506,7 @@ saturates ($\rho'\to0$, $J$ singular) with $V\sim-\log(F^*-\alpha)$. Stepping $\
 fold; continuing in $V\approx\psi$ keeps steps uniform. Congestion laws have no such fold.}\label{fig:cusp}
 \end{figure}
 
-\section{Undirected congestion equilibrium on real road-network graphs}\label{sec:traffic}
+\section{Transportation: undirected congestion equilibrium}\label{sec:traffic}
 This is NLF's sharpest result: on convex congestion flow---which has no combinatorial competitor and
 whose operator never folds---NLF is an empirically linear-time solver, cross-checked against a
 state-of-the-art interior-point method on real road-network topologies.
@@ -588,7 +538,7 @@ marginal cost $\rho_e=t_e^{-1}$, with conductance
 $\rho'_e=1/t_e'(f)=\big(t^0_e b\,p\,(f/c_e)^{p-1}/c_e\big)^{-1}>0$ at every \emph{finite} flow: the cost
 rises but never caps the flow (the law does not saturate), so there is no feasibility limit and no fold.
 The Jacobian $J=B\,\mathrm{diag}(\rho')B^{\top}$ is a well-conditioned weighted Laplacian at every
-bounded-flow iterate, and NLF runs as pure fixed-load cycling (Algorithm~\ref{alg:fixed})---each step an $\Om$ LAMG+ cycle, a handful
+bounded-flow iterate, and NLF runs as pure fixed-load cycling (Algorithm~\ref{alg:fixed})---each step an $\Om$ inner solve, a handful
 of steps in total, $\Om$ overall.\footnote{We use a strictly convex, twice-differentiable form of
 \eqref{eq:bpr} with the same free-flow and degree-$p$ congestion structure and real $(t^0_e,c_e,b,p)$
 from the data; this regularizes the free-flow threshold so the dual problem is well posed. ``Practical
@@ -654,7 +604,7 @@ cross-check, not a claim on the directed origin--destination user equilibrium (\
 App.~\ref{app:instances}).
 
 \begin{table}[t]\centering\small
-\caption{NLF (BPR congestion, LAMG+ inner) vs.\ Ipopt~\cite{tntp} on the \emph{undirected,
+\caption{NLF (BPR congestion, near-linear inner) vs.\ Ipopt~\cite{tntp} on the \emph{undirected,
 single-commodity} Beckmann congestion program over real road-network topologies. Both solvers reach
 the \emph{same equilibrium of this program}; the objective matches to the tolerance, link flows to
 $\sim10^{-10}$. This is the undirected net-flow relaxation, \emph{not} the field's directed
@@ -687,16 +637,14 @@ near-linear and \emph{beats} NLF (by $\approx3\times$; planar graphs are where d
 excel). On poorly-separable graphs the KKT fill-in explodes---$t\propto m^{2.2}$---so the gap inverts
 and widens with size: NLF is $5\times$ faster at $m=3.0\times10^4$, $45\times$ at $m=1.2\times10^5$,
 and at $m=2.4\times10^5$ Ipopt does not finish within its $120$\,s CPU budget while NLF finishes in
-$3.0$\,s. This is the textbook direct-vs-iterative crossover---now for a \emph{nonlinear} convex flow.
-We are careful about what it shows: these Erd\H{o}s--R\'enyi graphs are \emph{well-conditioned}, so the
-win over the IPM is its KKT \emph{fill-in}, and \emph{any} matrix-free solver inherits it---a
-first-order L-BFGS on the dual ties NLF here (Table~\ref{tab:robustness}). The advantage at scale on
-this class is ``avoid factorization,'' not ``use multigrid''; multigrid's distinctive value appears on
-ill-conditioned graphs (Table~\ref{tab:robustness}, \S\ref{sec:frontier}).
+$3.0$\,s---the textbook direct-vs-iterative crossover, now for a \emph{nonlinear} convex flow. We are
+careful about what it shows: these graphs are \emph{well-conditioned}, so the win over the IPM is its
+KKT \emph{fill-in}, which \emph{any} matrix-free solver inherits; the near-linear inner's distinctive
+value is on the \emph{ill-conditioned} graphs of the frontier (\S\ref{sec:frontier}).
 
 \begin{table}[t]\centering\small
 \caption{Scaling on poorly-separable (Erd\H{o}s--R\'enyi) graphs with BPR cost: NLF (Algorithm~\ref{alg:cont},
-$\Om$ LAMG+ inner) vs.\ Ipopt 3.14.19 (interior-point, MUMPS~5.9.0 sparse-direct KKT). Both reach the
+$\Om$ near-linear inner) vs.\ Ipopt 3.14.19 (interior-point, MUMPS~5.9.0 sparse-direct KKT). Both reach the
 same optimum of the undirected congestion program. NLF's step count shows no size trend; Ipopt is
 superlinear and exceeds the $120$\,s CPU budget on the largest instance (``---'').
 Speed-up $=t_{\mathrm{Ipopt}}/t_{\mathrm{NLF}}$.}\label{tab:bprscale}
@@ -727,10 +675,10 @@ in $3.0$\,s.}\label{fig:traffic}
 The road networks above exercise NLF on real flow topologies; we now show it inherits LAMG+'s
 \emph{graph-class} robustness in full. We impose a single-commodity BPR congestion instance (random
 capacities and free-flow times, a far source--sink demand) on \emph{every} graph of the real-world
-SuiteSparse collection that LAMG+ was benchmarked on with at least ten nodes and a nonempty connected
-pattern---$2{,}003$ graphs, spanning structured grids, finite-element and circuit meshes, web,
-social, road, and citation networks, from $10^2$ to $1.8\times10^7$ edges---and run NLF with the
-LAMG+ inner solve, all at stock settings.
+SuiteSparse collection with at least ten nodes, \emph{each reduced to its largest connected
+component}---$2{,}003$ graphs, spanning structured grids, finite-element and circuit meshes, web,
+social, road, and citation networks, from $10^2$ to $1.8\times10^7$ edges---and run NLF at stock
+settings (the near-linear inner solver is interchangeable, \S\ref{sec:ablation}).
 
 Under this protocol---one BPR instance per graph, random capacities, a single far source--sink
 demand, stock settings---NLF converged on \textbf{all $2{,}003$ graphs}, to residuals at or below the
@@ -742,7 +690,7 @@ decades, consistent with the inner solver's $\mathcal{O}(m\log(1/\varepsilon))$ 
 near-linear, not a proof of $O(m)$) over the $1{,}788$ graphs above $10^3$ edges (Fig.~\ref{fig:corpus}A),
 with a per-edge cost flat across five decades (median
 $2.4~\mu$s/edge, $95$th percentile $9.3$). The cycle count and the multigrid factor simply do not see
-the topology; the inner LAMG+ solve carries its parameter-free $\Om$ robustness over unchanged. The
+the topology; the inner solve carries its parameter-free $\Om$ robustness over unchanged. The
 largest constants belong to eleven huge-diameter road and finite-element meshes
 ($1.5$--$13.6\times10^6$ edges, e.g.\ \texttt{germany\_osm}, \texttt{roadNet-*}), whose
 ${\ge}20$-level hierarchies engage the grown cycle schedule of the \S\ref{sec:algorithm} footnote:
@@ -759,37 +707,24 @@ per-edge cost flat at ${\approx}2.4~\mu$s/edge median. (B)~cycle count: a flat d
 (median $18$, range $6$--$33$).}\label{fig:corpus}
 \end{figure}
 
-\subsection{The three-paradigm robustness frontier}\label{sec:frontier}
-The inner swap of \S\ref{sec:inner} shows the two \emph{near-linear} engines are interchangeable. The
-prior question is why a multigrid-class inner at all, rather than the other two solver paradigms one
-could plug into the same outer loop: a \emph{sparse-direct} KKT/Jacobian solve (what an interior-point
-method uses), or a \emph{matrix-free first-order} method. Because \eqref{eq:master} is a single convex
-problem, one can even bypass the Newton inner solve entirely and minimize the dual energy
-\eqref{eq:dual} by a quasi-Newton method (L-BFGS on the dual); on individual \emph{well-conditioned}
-graphs this matches NLF in wall-clock---so NLF's speed-up over the interior-point method on the
-well-conditioned poorly-separable instances of \S\ref{sec:bprscale} is a \emph{fill-in} effect any
-matrix-free solver inherits, not a property of multigrid. But that parity is the exception. We ran all
-three paradigms---NLF (multigrid-Newton), Ipopt (interior-point / sparse-direct KKT), and
-L-BFGS-on-the-dual (matrix-free first-order)---on the \emph{same} undirected BPR congestion program
-across the SuiteSparse corpus---the $1{,}669$ graphs completed under the heavier three-solver protocol,
-of the $2{,}003$ in the single-solver sweep (\S\ref{sec:corpus}); the remainder are the largest, where
-the sparse-direct competitor is increasingly size-limited. Each competitor is capped at $5\times$ the
-measured NLF wall-clock (a $1$\,s floor and a $120$\,s ceiling; Table~\ref{tab:robustness},
-Fig.~\ref{fig:frontier}). \textbf{NLF converged on every graph ($100\%$); within that budget the
-first-order method did not finish on $481$ of $1{,}669$ and the interior-point method on $143$}---of the
-latter, eight reach the $120$\,s ceiling, two are too large to factor, and the rest ran slower than
-$5\times$NLF. Where the competitors \emph{do} converge, NLF is a median $2.6\times$ faster than Ipopt
-and $4.2\times$ faster than L-BFGS, and it is the fastest-or-only solver on $85\%$ of the corpus. The
-two limiting modes are the two axes: a preconditioner-free first-order method slows as the
-conductance-weighted Laplacian ill-conditions ($\kappa(J)$ large---e.g.\ grids, $\kappa\sim N$,
-$\Theta(\sqrt N)$ iterations), while sparse-direct fills in as separators worsen. \textbf{Multigrid is
-the inner default because it is the only paradigm that stays within budget on \emph{both} axes}: on $90$
-corpus graphs neither competitor finishes within $5\times$NLF---they sit at the hard corner of both axes
-(first-order to a median $200$ and up to $1{,}037$ dual iterations; sparse-direct filling in)---while NLF
-does. This is where NLF's speed and robustness compound; it is not a claim that the others cannot
-converge given unbounded time ($2$ further graphs are also too large for sparse-direct;
-Fig.~\ref{fig:frontier}, upper right). On any single well-behaved class a simpler inner solve suffices;
-across the real-world corpus, multigrid is the robust choice.
+\subsection{Why a near-linear inner: the paradigm frontier}\label{sec:frontier}
+The ablation below (\S\ref{sec:ablation}) picks the engine \emph{within} the near-linear class; first
+we justify the class itself, against the two other paradigms one could plug into the same outer
+loop---a \emph{sparse-direct} KKT/Jacobian solve (what an interior-point method uses) and a
+\emph{matrix-free first-order} method. (Because
+\eqref{eq:master} is convex one can even bypass the Newton inner solve and minimize the dual energy
+\eqref{eq:dual} by L-BFGS; on \emph{well-conditioned} graphs this ties NLF, so the speed-up over the
+interior-point method there is a \emph{fill-in} effect any matrix-free solver inherits, not a property
+of the inner.) We ran all three on the \emph{same} BPR program across the corpus---the $1{,}669$ graphs
+on which the heavier three-solver protocol completes, each competitor capped at $5\times$ NLF's
+wall-clock (Table~\ref{tab:robustness}). \textbf{NLF converged on all
+$1{,}669$}; within budget the first-order method failed on $481$ and the interior-point on $143$. The
+two failure modes are the two axes---first-order slows as $J$ ill-conditions ($\kappa\sim N$ on grids),
+sparse-direct fills in as separators worsen---and on the $90$ graphs at the hard corner of both,
+neither competitor finishes within $5\times$NLF while NLF does. Where they converge, NLF is a median
+$2.6\times$/$4.2\times$ faster than Ipopt/L-BFGS and fastest-or-only on $85\%$. The near-linear inner
+is thus the robust paradigm across the corpus; the ablation (\S\ref{sec:ablation}) picks the engine
+within it.
 
 \begin{table}[t]\centering\small
 \caption{Three-paradigm robustness frontier across the SuiteSparse corpus ($1{,}669$ graphs, undirected
@@ -799,7 +734,7 @@ capped at $5\times$ the measured NLF wall-clock ($1$\,s floor, $120$\,s ceiling)
 graph and is the only paradigm that stays within budget on both axes. Of the $92$ union graphs neither
 competitor finishes within $5\times$NLF on $90$; $2$ more also exceed the sparse-direct size limit
 (``within budget'' is a wall-clock criterion, not a claim the others cannot converge given more time).
-Fig.~\ref{fig:frontier} plots the frontier.}\label{tab:robustness}
+}\label{tab:robustness}
 \begin{tabular}{p{0.34\columnwidth} r p{0.44\columnwidth}}
 \toprule
 regime & graphs & outcome\\
@@ -814,37 +749,84 @@ poorly-separable (direct fills in) & $51$ & Ipopt over budget (fill-in); NLF, L-
 \end{tabular}
 \end{table}
 
-\begin{figure}[t]\centering
-\includegraphics[width=0.76\textwidth]{nlf_frontier.pdf}
-\caption{Three-paradigm robustness frontier over $1{,}669$ SuiteSparse graphs (undirected BPR congestion):
-each point is a graph, placed by a conditioning proxy ($x$: L-BFGS-on-dual iterations) and a
-separability proxy ($y$: Ipopt time / NLF time), colored by outcome. First-order (L-BFGS) runs over
-budget toward the right (ill-conditioned); sparse-direct (Ipopt) toward the top (poorly-separable); in
-the upper right \emph{both} exceed the $5\times$NLF budget and NLF/multigrid is the only solver that
-finishes. NLF converged on all $1{,}669$.}\label{fig:frontier}
-\end{figure}
+\subsection{Inner-solver ablation: which near-linear engine}\label{sec:ablation}
+The framework fixes a near-linear inner solver but not which one (\S\ref{sec:inner}); we settle the
+default empirically. Holding NLF's outer method fixed (load-continuation chord-Newton, lazy refresh),
+we swap \emph{only} the inner Laplacian solve and rerun the congestion corpus of
+\S\ref{sec:corpus} (one BPR instance each; over $1{,}800$ graphs, the remainder the largest in the
+corpus). The candidates are the two
+public $\Om$ solvers of \S\ref{sec:inner}, approximate Cholesky and LAMG+; we exclude sparse-direct,
+which is not near-linear---its separability crossover against an $\Om$ inner is the scaling result of
+\S\ref{sec:bprscale}, not an inner we would ship.
 
-\subsection{Direct vs.\ multigrid inner: the separability axis}\label{sec:vsdirect}
-The three-paradigm comparison of \S\ref{sec:frontier} (Fig.~\ref{fig:frontier}) already pits the multigrid inner
-against sparse-direct factorization; we confirm the mechanism by swapping \emph{NLF's own} inner engine
-between LAMG+ and a sparse-direct factorization of the same Jacobian, the nonlinear solve held fixed.
-The determinant is graph \emph{separability}, not size: on good-separator graphs---2D/3D meshes,
-circuits, roads even at $7\times10^6$ edges (\texttt{italy\_osm})---nested-dissection fill stays cheap
-and direct wins or ties; on poorly-separable social/web/citation graphs the fill explodes and multigrid
-is $4$--$52\times$ faster, and on \texttt{cage13} the factorization exhausts memory and aborts while
-multigrid solves it in $13$\,s. Across the band $200\le\mathrm{nnz}\le3\times10^6$ the split is
-systematic---direct wins the well-separated $\sim$$50\%$, multigrid the poorly-separable $\sim$$30\%$
-(by up to $52\times$), the rest within $1.2\times$; aggregation multigrid has its own weak class
-(planar \texttt{delaunay}, where direct wins), reported not hidden. The genuine application of the
-multigrid regime is communication-network routing on poorly-separable internet/AS/P2P topologies, where
-the multigrid inner wins outright ($24.9\times$ on \texttt{p2p-Gnutella31}, $4.0\times$ on
-\texttt{as-22july06}). This is the separability axis of the frontier (Fig.~\ref{fig:frontier}); the
-conditioning axis is what defeats the first-order baseline there.
+\emph{Both converge on every graph, to the identical equilibrium}: the dual energy agrees to
+floating-point precision and the link flows to $\le2\times10^{-8}$ relative. Robustness is therefore
+not a discriminator inside NLF---pointedly so for approximate Cholesky, whose bare preconditioned-CG
+can stall on adversarial linear systems but, wrapped in the outer loop's lazy refresh and line search,
+reaches $100\%$. Speed splits by graph class, both ways: approximate Cholesky is faster on $82\%$ of
+graphs (median $1.8\times$, up to $43\times$---its cheap factor wins on low-treewidth mesh and
+finite-element graphs) and LAMG+ on the other $18\%$ (up to $24\times$---its hierarchy wins on the
+poorly-separable graphs); the overall median is $1.6\times$ in approximate Cholesky's favour, with
+$39\%$ of graphs within $1.5\times$ either way (Table~\ref{tab:innerswap}). \textbf{We therefore adopt
+approximate Cholesky as the default}---equal robustness, faster in the median---and keep LAMG+ as a
+drop-in alternative, preferred at the saturating fold, where its cut-respecting aggregation
+(\S\ref{sec:inner}) keeps the near-singular inner solve clean (\S\ref{sec:innerfold}). Parameter
+sensitivity is mild and one-sided (Table~\ref{tab:paramablation}): freezing the factor more
+aggressively trades a few extra outer steps for fewer setups until it over-freezes, and a looser inner
+forcing $\eta$ costs outer steps; the stock $(\text{refresh}=0.25,\ \eta=0.05)$ sits in the flat
+interior.
+
+\begin{table}[t]\centering\small
+\caption{Inner-solver ablation inside NLF's BPR congestion solve, outer method fixed: LAMG+ vs.\
+approximate Cholesky (both $\Om$). Wall-clock seconds and outer (chord-Newton) steps, to a $10^{-7}$
+residual; \emph{both return the identical equilibrium} (energy $E$ to the digits shown; flows to
+$\Delta f$ relative). $t_{\mathrm{L}}/t_{\mathrm{A}}{>}1$ means approximate Cholesky is faster. A
+representative cross-class subset spanning both speed directions; the corpus-wide summary is in the
+text and the full per-graph output in the released artifact.}\label{tab:innerswap}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{llrrrrr}
+\toprule
+graph & class & $m$ & energy $E$ & LAMG+ (stp) & approxChol (stp) & $t_{\mathrm{L}}/t_{\mathrm{A}}$\\
+\midrule
+\texttt{3elt}          & 2D mesh     & 13{,}722  & $-0.8939$ & $0.064$ (16) & $0.11$ (21)  & $0.6$\\
+\texttt{airfoil1}      & 2D FEM      & 12{,}289  & $-0.9866$ & $0.05$ (18)  & $0.015$ (21) & $3.3$\\
+\texttt{bodyy5}        & aniso.\ FEM & 55{,}346  & $-0.9045$ & $0.64$ (18)  & $0.074$ (22) & $8.7$\\
+\texttt{bcsstk38}      & structural  & 173{,}714 & $-0.0432$ & $0.23$ (15)  & $0.23$ (21)  & $1.0$\\
+\texttt{G2\_circuit}   & circuit     & 288{,}286 & $-1.9134$ & $2.60$ (21)  & $0.86$ (24)  & $3.0$\\
+\texttt{fe\_ocean}     & FEM mesh    & 409{,}593 & $-1.0609$ & $3.94$ (18)  & $1.00$ (24)  & $3.9$\\
+\texttt{p2p-Gnutella04}& P2P         & 39{,}994  & $-3.1625$ & $0.14$ (24)  & $0.080$ (25) & $1.7$\\
+\texttt{as-caida}      & AS/comm     & 53{,}381  & $-6.6601$ & $0.19$ (20)  & $0.071$ (23) & $2.7$\\
+\texttt{web-NotreDame} & web         & 1{,}090{,}108 & $-25.957$ & $4.49$ (27) & $3.50$ (29) & $1.3$\\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\begin{table}[t]\centering\small
+\caption{Outer-loop parameter sensitivity (approximate-Cholesky inner): outer (chord-Newton) steps to
+a $10^{-9}$ residual on representative congestion instances. \emph{Refresh}---rebuild the frozen factor
+when a step's residual reduction is worse than this threshold ($\eta{=}0.05$ fixed): flat in the
+interior, a few extra steps only when over-frozen (\texttt{as-caida}). \emph{Forcing} $\eta$---the
+inner relative tolerance (refresh${=}0.25$ fixed): a looser inner trades directly into more outer
+steps. The stock $(\text{refresh},\eta){=}(0.25,0.05)$ (bold) sits in the flat interior and is
+near time-optimal.}\label{tab:paramablation}
+\begin{tabular}{lrrrr@{\qquad}rrr}
+\toprule
+ & \multicolumn{4}{c}{refresh ($\eta{=}0.05$)} & \multicolumn{3}{c}{forcing $\eta$ (refresh${=}0.25$)}\\
+\cmidrule(lr){2-5}\cmidrule(l){6-8}
+graph & $0.10$ & $\mathbf{0.25}$ & $0.50$ & $0.80$ & $0.01$ & $\mathbf{0.05}$ & $0.20$\\
+\midrule
+\texttt{airfoil1}      & 18 & \textbf{18} & 18 & 18 & 14 & \textbf{18} & 33\\
+\texttt{as-caida}      & 21 & \textbf{20} & 29 & 29 & 17 & \textbf{19} & 25\\
+\texttt{bodyy5}        & 18 & \textbf{21} & 18 & 19 & 15 & \textbf{18} & 36\\
+\texttt{delaunay\_n16} & 18 & \textbf{18} & 21 & 18 & 15 & \textbf{18} & 33\\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \subsection{Cost as a function of the desired accuracy}\label{sec:accuracy}
 The dependence on the requested solution accuracy $\varepsilon$ is logarithmic. Each inner solve to
-relative residual $\delta$ costs $\mathcal{O}(m\log(1/\delta))$: the empirically bounded multigrid
-factor $\mu$ gives $\log(1/\delta)/\log(1/\mu)$ cycles. The outer iteration is a frozen chord-Newton with
+relative residual $\delta$ costs $\mathcal{O}(m\log(1/\delta))$ (a bounded inner contraction gives
+$\mathcal{O}(\log(1/\delta))$ inner iterations). The outer iteration is a frozen chord-Newton with
 inexact-Newton forcing $\eta_k$ tracking the nonlinear residual $\|r_k\|$ (\S\ref{sec:inner}); its
 per-step cycle counts form a series \emph{dominated by the final solve} (where
 $\|r_k\|\!\to\!\varepsilon$), the earlier looser steps adding only a bounded geometric tail, while the
@@ -858,30 +840,21 @@ The constant is the whole-nonlinear-solve-to-one-linear-solve ratio measured bel
 stays bounded because the frozen chord-Newton contraction stays bounded away from $1$: on the no-fold
 congestion class directly (\S\ref{sec:traffic}), and \emph{through the fold} because the continuation
 deflates the diverging cut direction and keeps the bordered corrector uniformly conditioned
-(\S\ref{sec:continuation})---so the bound does not degrade at $F^*$. Figure~\ref{fig:accuracy} verifies
-it numerically: sweeping $\varepsilon$ from $10^{-2}$ to $10^{-12}$ on one graph per class (web, social,
-road, finite-element), with inexact Newton at forcing $\eta=0.1$ (one V-cycle per step), the total
-inner V-cycle count grows \emph{linearly} in $\log(1/\varepsilon)$, at $0.24$--$0.60$ cycles per
-decade of accuracy.
+(\S\ref{sec:continuation})---so the bound does not degrade at $F^*$. We verify it numerically by
+sweeping $\varepsilon$ from $10^{-2}$ to $10^{-12}$ on one graph per class (web, social, road,
+finite-element): the total inner-solve count grows \emph{linearly} in $\log(1/\varepsilon)$, at
+$0.24$--$0.60$ per decade of accuracy, confirming \eqref{eq:eps}.
 
 \paragraph{The nonlinear/linear cost ratio is $\mathcal{O}(1)$} The sharpest single statement of
 the method's efficiency is Brandt's yardstick: solving the \emph{nonlinear} problem should cost only
 a small, size-independent multiple of solving \emph{one linear problem} of the same
 kind~\cite[\S8.3]{brandt-guide}. We measure exactly this: the full congestion solve (load
-continuation, all steps, all cycles, lazy refresh) against a single LAMG+ setup-and-solve of
+continuation, all steps, all cycles, lazy refresh) against a single inner setup-and-solve of
 the linearization at $\alpha=0$ (the linear resistor network $B\,\mathrm{diag}(\rho'(0))B^{\top}\phi=d$)
 on the same graph. Across the classes the ratio is
 \textbf{$1.9$--$4.4$}---grid $3.1$, finite-element $2.5$, road $1.9$, social $3.8$, web ($1.9\times10^6$
 edges) $4.4$---flat in size and class: the entire nonlinear equilibrium costs $2$--$4$ linear
 Laplacian solves.
-
-\begin{figure}[t]\centering
-\includegraphics[width=0.6\textwidth]{nlf_accuracy.pdf}
-\caption{Cost vs.\ desired accuracy: total inner V-cycles against $\log_{10}(1/\varepsilon)$, one
-graph per class. The count is \emph{linear} in $\log(1/\varepsilon)$ ($0.24$--$0.60$ cycles per
-decade), confirming the total cost $\mathcal{O}(m\log(1/\varepsilon))$ of
-\eqref{eq:eps}.}\label{fig:accuracy}
-\end{figure}
 
 \section{Maximum flow}\label{sec:maxflow}
 The saturating instance \eqref{eq:rho} recovers the exact combinatorial maximum flow. Read
@@ -1002,7 +975,7 @@ graph & class & $n$ & $F^*$ & LAMG+ & approxChol & direct & diagPCG\\
 \S\ref{sec:traffic} established the formulation and the $\Om$ solver for a single commodity. This
 section extends both, end to end, to $K$ simultaneously routed commodities: a vector edge law that
 couples the commodities through shared congestion (\S\ref{sec:mcform}), a solver that reuses
-Algorithm~\ref{alg:fixed} and \emph{one} scalar LAMG+ hierarchy for all $K$ commodities
+Algorithm~\ref{alg:fixed} and \emph{one} scalar inner setup (factor or hierarchy) for all $K$ commodities
 (\S\ref{sec:mcalg}), validation against an exact-Newton reference (\S\ref{sec:mcvalid}), and the same
 full-corpus robustness sweep as \S\ref{sec:corpus} (\S\ref{sec:mccorpus}). The implementation is a
 modular layer over the single-commodity solver; nothing in the latter changes.
@@ -1057,7 +1030,7 @@ $R=(r^1,\dots,r^K)$, $r^k=\alpha d^k-Bf^k$, and the stopping test is on the stac
 \emph{(ii)~A scalar frozen operator.} Rather than freeze the $K\times K$ block linearization, NLF
 freezes a \emph{scalar} hierarchy $H$ on the single conductance
 $w_e=\sqrt{c_e\rho'_e}$---the geometric mean of the block's two eigenvalues---and computes the
-correction as $K$ independent cycles, $\delta^k$ from $H$ against $r^k$. One $\Om$ LAMG+ setup
+correction as $K$ independent inner solves, $\delta^k$ from $H$ against $r^k$. One $\Om$ inner setup
 serves all $K$ commodities and all chord steps. Per edge the preconditioned block spectrum is
 $\{\sqrt{c_e/\rho'_e},\,\sqrt{\rho'_e/c_e}\}$, symmetric about $1$ with spread
 $c_e/\rho'_e\le p$ independent of $K$, $m$, and the iterate: the damped chord iteration contracts at
@@ -1186,25 +1159,20 @@ $\Om$ Laplacian machinery that \emph{solves} \eqref{eq:master} also \emph{differ
 exactly what bilevel network design needs.
 
 \subsection{One-shot FAS: what we tried, and why we sealed it}\label{sec:fasfail}
-The methodologically pure alternative to Algorithm~\ref{alg:fixed} is a genuinely nonlinear cycle:
-nonlinear relaxation on the nodal balance, the same elimination-and-aggregation hierarchy, full
-nonlinear coarse equations with the fine-to-coarse $\tau$ correction~\cite{brandt-fas,brandt-guide},
-the load advanced by continuation---no global linearization anywhere. We built this prototype for the
-saturating law and record its failure so it need not be rediscovered. In a controlled experiment at
-\emph{fixed} load $\alpha=0.6F^{*}$ (far below the fold), from the same warm start and with equal fine
-relaxation, full $\tau$-corrected V-cycles on a frozen aggregation hierarchy reached the \emph{same}
-residual after $20$ cycles as Gauss--Seidel--Newton relaxation alone (slightly worse on a
-$16\times16$ grid): the coarse correction removed essentially none of the smooth error---it was
-\emph{inert}. Two suspects were removed by experiment: staleness (a cut-aware hierarchy frozen near
-$F^{*}$ converged no better than a cut-blind one frozen at $\phi=0$, and rebuilding every step did not
-help) and where $\alpha$ is updated (orthogonal; \S\ref{sec:fmg}). The surviving suspect is the
-inter-grid transfer of the nonlinear state---near saturation $\rho'$ varies by orders of magnitude
-within an aggregate, so a caliber-1 transfer of $\phi$ misrepresents the flux from which the coarse
-$\tau$ is computed---but the flux-based transfer~\cite[\S4.6]{brandt-guide} that would test it was
-never completed. Two limits keep this honest: the prototype was bespoke, not the full LAMG+ machinery
-rebuilt nonlinearly, and the no-fold congestion law was never FAS-tested. We do not claim one-shot FAS
-is impossible---only that its coarse levels did nothing where we tested it, and the economics remove
-the incentive (the frozen-linearization solver already costs $1.9$--$4.4\times$ one linear solve).
+The methodologically pure alternative to Algorithm~\ref{alg:fixed} is a genuinely nonlinear cycle---FAS
+with full nonlinear coarse equations and the $\tau$ correction~\cite{brandt-fas,brandt-guide}, no
+global linearization anywhere. We built this for the saturating law and record its failure so it need
+not be rediscovered. At a \emph{fixed} load $\alpha=0.6F^{*}$, full $\tau$-corrected V-cycles on a
+frozen aggregation hierarchy reached the same residual after $20$ cycles as Gauss--Seidel--Newton
+relaxation alone: the coarse correction was \emph{inert}. Experiment cleared two suspects---staleness (a
+cut-aware hierarchy frozen near $F^{*}$ did no better than a cut-blind one, and rebuilding every step
+did not help) and where $\alpha$ is updated (\S\ref{sec:fmg}); the surviving suspect is inter-grid
+transfer of the nonlinear state (near saturation $\rho'$ varies by orders of magnitude within an
+aggregate, so caliber-1 transfer of $\phi$ misrepresents the flux feeding the coarse $\tau$), which the
+flux-based transfer~\cite[\S4.6]{brandt-guide} would test but we did not complete. We do not claim
+one-shot FAS is impossible---only that its coarse levels did nothing where we tested it, and the
+economics remove the incentive (the frozen-linearization solver already costs $1.9$--$4.4\times$ one
+linear solve).
 
 \subsection{Full multigrid: $\alpha$ at the coarsest level}\label{sec:fmg}
 Brandt's nested-iteration ideal~\cite[\S5.6]{brandt-guide} would update the global scalar $\alpha$ at
@@ -1258,48 +1226,28 @@ To obtain full multigrid efficiency, a Full Approximation Scheme (FAS) \cite{bra
 generation cost $\sum_i C_i(p^g_i)$ and the box constraints $p^{\min}\le
 p^g\le p^{\max}$ into the coarse-level problems. Nonlinear relaxation is applied at each level, and each coarse generator node represents an aggregate of fine-level generators.
 
-\section{Scope and anticipated questions}\label{sec:discussion}
-
-\paragraph{Scope, honestly stated} NLF has no combinatorial competitor on convex congestion (matches
-the interior-point optimum to $10^{-10}$, empirically near-linear, wins to $45\times$ on poor
-separators, \S\ref{sec:traffic}); wins $2$--$52\times$ and is often the only solver to complete on
-poorly-separable graph-Laplacian flow such as communication routing
-(\S\ref{sec:vsdirect},\,\ref{sec:mc}); is competitive but only asymptotically faster on well-separated
-meshes and roads, where direct factorization wins; returns the cut, dual, and parametric curve on
-max-flow without competing on the bare value (\S\ref{sec:maxflow}); and makes no speed claim on
-DC-OPF, a motivating application only (\S\ref{sec:outofscope}). The formulation \eqref{eq:master}
-itself is classical---the monotropic-programming optimality system~\cite{rockafellar-monotropic}; the
-contribution is the unification, the frozen-linearization $\Om$ solver, and the empirical demonstration
-(\S\ref{sec:priorwork}).
-
-\emph{Why only a single source--sink demand?} This feasibility study establishes the two load-bearing
-claims---that the (undirected) equilibrium is exactly \eqref{eq:master}, and that an $\Om$ inner solve
-makes it linear-time. The directed full origin--destination assignment is future work
-(\S\ref{sec:extensions}; \S\ref{sec:mc} is the first rung); against the directed bush-based/TAPAS
-solvers~\cite{bargera2002,bargera2010}, which target that directed program and not the undirected
-relaxation studied here, a same-instance comparison is the clearest remaining experiment.
-
-\emph{Reproducibility.} Every table is produced by scripts run on public benchmarks---the SuiteSparse
-collection, the Transportation Networks road data~\cite{tntp}, and the MATPOWER/pglib-opf
-grids~\cite{matpower}. The interior-point comparator is Ipopt~3.14.19 with the MUMPS~5.9.0 sparse
-linear solver and a $120$\,s CPU budget; the BPR law is regularized to the strictly convex,
-twice-differentiable form noted in \S\ref{sec:bpr}, and the random capacity/free-flow distributions
-and demand-selection seeds are fixed and recorded in the released scripts. The LAMG+ linear core is
-publicly available~\cite{lamgplus}; the NLF nonlinear solver, the exact instance-generation scripts,
-and a reproducibility notebook---which re-runs the fold, no-fold, and competitor timings live and
-checks them against these tables---are released at \url{https://github.com/orenlivne/nlf}.
-
 \section{Conclusion}\label{sec:conclusion}
-NLF is a single resistor-network framework for convex, edge-separable network-flow equilibria
-$B\,\rho(B^{\top}\phi)=\alpha d$: placing the nonlinearity in the edge law lets one energy encode
-problems from electrical flow to max-flow exactly, solved by a damped chord-Newton on a frozen
-linearization cycled against the nonlinear residual by a lazily refreshed near-linear Laplacian solver.
-Its sharpest result is on undirected convex congestion---an interior-point optimum reproduced to
-$10^{-10}$ at a size-independent step count, near-linear on poorly-separable graphs where direct
-factorization is superlinear. Direct methods win on well-separated graphs and combinatorial solvers on
-the bare max-flow value; the directed origin--destination assignment remains future work (the
-multicommodity layer is its first rung). The contribution is the unification and the demonstration that
-one frozen-linearization, multigrid-inner solver handles all of it at near-linear cost.
+Placing the nonlinearity in the \emph{edge law} collapses a family of convex, edge-separable
+network-flow equilibria---electrical, congestion, minimum-delay, maximum-flow---onto one nonlinear
+Laplacian $B\,\rho(B^{\top}\phi)=\alpha d$, solved by a damped chord-Newton on a frozen linearization
+cycled against the nonlinear residual. The point is not a new linear solver but that \emph{any}
+near-linear Laplacian solve suffices for the whole nonlinear class: on undirected convex congestion NLF
+reproduces the interior-point optimum to $10^{-10}$ at a size-independent step count and near-linear
+cost, overtaking sparse-direct factorization exactly where it fills in. The limits are stated
+plainly---direct wins on well-separated meshes and roads, combinatorial solvers own the bare max-flow
+value (NLF instead returns the cut, the dual, and the parametric curve), and the directed
+origin--destination assignment is future work, its multicommodity layer the first rung. The formulation
+is the classical monotropic optimality system~\cite{rockafellar-monotropic}; the contribution is the
+unification and the demonstration that one frozen-linearization, near-linear-inner solver covers it.
+
+\paragraph{Reproducibility} Every table is produced by scripts on public benchmarks---the SuiteSparse
+collection (each instance reduced to its largest connected component, \S\ref{sec:corpus}), the
+Transportation Networks road data~\cite{tntp}, and MATPOWER grids~\cite{matpower}. The interior-point
+comparator is Ipopt~3.14.19 (MUMPS~5.9.0, $120$\,s CPU budget); the BPR law uses the strictly convex
+regularization of \S\ref{sec:bpr}; capacity/free-flow distributions and demand seeds are fixed and
+recorded. The inner solvers are public~\cite{approxchol,lamgplus}; the NLF solver, instance-generation
+scripts, and a reproducibility notebook that re-runs the timings and checks them against these tables
+are at \url{https://github.com/orenlivne/nlf}.
 
 \appendix
 \section{Why each application is an instance of the framework}\label{app:instances}
@@ -1354,7 +1302,7 @@ $(1+\epsilon)$ relaxation is involved.
 
 
 \begin{thebibliography}{99}
-\small
+\footnotesize\setlength{\itemsep}{0.2ex}
 \bibitem{lamg} O.~E.~Livne and A.~Brandt, \emph{Lean Algebraic Multigrid (LAMG): Fast Graph
 Laplacian Linear Solver}, SIAM J.\ Sci.\ Comput.\ \textbf{34}(4), B499--B522, 2012.
 \bibitem{matpower} R.~D.~Zimmerman, C.~E.~Murillo-S\'anchez, and R.~J.~Thomas, \emph{MATPOWER:
