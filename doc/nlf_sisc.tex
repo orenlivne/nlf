@@ -337,72 +337,64 @@ exhaust memory---it is among the fastest solvers available. The leading alternat
 graph-Laplacian solvers---approximate Cholesky \cite{gks2023} and Napov--Notay's degree-aware
 aggregation (DRA-QC) \cite{napov-notay}---are equally admissible. The framework is
 \emph{engine-agnostic}: it requires only a near-linear Laplacian solve that does not stall, and any
-of these may be substituted. We have verified directly that approximate Cholesky is fully
-interchangeable as the inner solver, matching LAMG+'s convergence across the corpus
-(\S\ref{sec:corpus}). The formulation and the frozen-Newton/continuation outer method are the
-contribution; the inner solve is a module. But the \emph{choice} of module is not cosmetic, and we
-state its role honestly. Because \eqref{eq:master} is a single nonlinear equation, one can even bypass
-the Newton inner solve entirely and minimize the convex dual energy
-$E(\phi)=\sum_e\Psi_e((B^{\top}\phi)_e)-\alpha d^{\top}\phi$ by a matrix-free quasi-Newton method
-(L-BFGS on the dual). On individual \emph{well-conditioned} graphs this matches NLF in wall-clock---so
-the bare speed-up over the interior-point method on the well-conditioned poorly-separable instances of
-\S\ref{sec:bprscale} is a \emph{fill-in} effect any matrix-free solver inherits, not a property of
-multigrid. But that parity is the exception, not the rule. We ran all three paradigms---NLF
-(multigrid-Newton), Ipopt (interior-point / sparse-direct KKT), and L-BFGS-on-the-dual (matrix-free
-first-order)---on the \emph{same} undirected BPR congestion program across the SuiteSparse corpus---the
-$1{,}669$ graphs completed under the heavier three-solver protocol, of the $2{,}003$ in the
-single-solver sweep (\S\ref{sec:corpus}); the remainder are the largest, where the sparse-direct
-competitor is increasingly size-limited. Each
-competitor is capped at $5\times$ the measured NLF wall-clock (a $1$\,s floor and a $120$\,s ceiling;
-Table~\ref{tab:robustness}, Fig.~\ref{fig:frontier}). \textbf{NLF converged on every graph ($100\%$);
-within that budget the first-order method did not finish on $481$ of $1{,}669$ and the interior-point
-method on $143$}---of the latter, eight reach the $120$\,s ceiling, two are too large to factor, and
-the rest ran slower than $5\times$NLF. Where the competitors \emph{do}
-converge, NLF is a median $2.6\times$ faster than Ipopt and $4.2\times$ faster than L-BFGS, and it is
-the fastest-or-only solver on $85\%$ of the corpus. The two limiting modes are the two axes: a
-preconditioner-free first-order method slows as the conductance-weighted Laplacian ill-conditions
-($\kappa(J)$ large---e.g.\ grids, $\kappa\sim N$, $\Theta(\sqrt N)$ iterations), while sparse-direct
-fills in as separators worsen. \textbf{Multigrid is the inner default because it is the only paradigm
-that stays within budget on \emph{both} axes}: on $90$ corpus graphs neither competitor finishes within
-$5\times$NLF---they sit at the hard corner of both axes (first-order to a median $200$ and up to
-$1{,}037$ dual iterations; sparse-direct filling in)---while NLF does. This is where NLF's speed and
-robustness compound; it is not a claim that the others cannot converge given unbounded time ($2$
-further graphs are also too large for sparse-direct; Fig.~\ref{fig:frontier}, upper right).
-On any single well-behaved class a simpler inner solve suffices; across the real-world corpus, multigrid
-is the robust choice.
+of these may be substituted. The formulation and the frozen-Newton/continuation outer method are the
+contribution; the inner solve is a module.
+
+\paragraph{The two near-linear inners are interchangeable}
+We verify the engine-agnostic claim directly: holding NLF's outer method fixed (the load-continuation
+chord-Newton of \S\ref{sec:fas}), we swap \emph{only} the inner Laplacian solve between LAMG+ and
+approximate Cholesky~\cite{approxchol}---both $\Om$---on a BPR congestion instance imposed on a
+cross-class subset of the corpus (Table~\ref{tab:innerswap}). The result is modularity, not a winner:
+\emph{both converge on every graph, to the identical equilibrium}---the dual energy
+\eqref{eq:dual} agrees to all printed digits and the link flows to $\le10^{-9}$ relative---so the
+choice of near-linear inner does not affect what NLF computes. Wall-clock differs by a constant only,
+and the two are \emph{peers on balance}---as one expects of two $\Om$ Laplacian solvers
+\cite{lamgplus,approxchol}---with a wide \emph{per-graph} spread in \emph{both} directions. Over a
+$158$-graph cross-class corpus sample both inners converge on \emph{$100\%$} to the identical
+equilibrium (objective to floating-point precision, flows to $\le7\times10^{-9}$); approximate
+Cholesky is faster on $83\%$ of graphs (median $1.8\times$, up to $27\times$) and LAMG+ on the other
+$17\%$ (up to $7.8\times$), with $41\%$ of graphs inside $1.5\times$ either way and an overall median
+of $1.6\times$ (at a mean ${+}4.4$ approxChol outer steps, its rougher inner solve loosening the
+chord-Newton step). The spread is graph-class dependent, not a uniform win for either engine.
+Robustness, then, is \emph{not} a discriminator here---both reach $100\%$---so on this fold-free
+problem the inner is genuinely a free choice; we keep LAMG+ as the reference engine (the companion
+paper's parameter-free solver, benchmarked corpus-wide, \S\ref{sec:corpus}) and report that
+approximate Cholesky is fully interchangeable and, in the median, slightly faster. The one place a
+difference survives is the saturating \emph{fold} (\S\ref{sec:innerfold}), where LAMG+'s
+cut-respecting aggregation yields cleaner inner solves on the near-singular Jacobian---though even
+there the outer continuation reaches the same $F^*$ with either. The \emph{paradigm} question---why a multigrid-class inner rather than a
+sparse-direct or matrix-free first-order solver---is the corpus-wide robustness frontier of
+\S\ref{sec:frontier}; here the point is narrower and cleaner: between the two near-linear engines the
+framework is indifferent.
 
 \begin{table}[t]\centering\small
-\caption{Inner-solver robustness frontier across the SuiteSparse corpus ($1{,}669$ graphs, undirected
-BPR congestion---the same convex program for all). NLF (multigrid-Newton) vs.\ Ipopt
-(interior-point/sparse-direct KKT) vs.\ L-BFGS-on-the-dual (matrix-free first-order); each competitor
-capped at $5\times$ the measured NLF wall-clock ($1$\,s floor, $120$\,s ceiling). NLF converges on every
-graph and is the only paradigm that stays within budget on both axes. Of the $92$ union graphs neither
-competitor finishes within $5\times$NLF on $90$; $2$ more also exceed the sparse-direct size limit
-(``within budget'' is a wall-clock criterion, not a claim the others cannot converge given more time).
-Fig.~\ref{fig:frontier} plots the frontier.}\label{tab:robustness}
-\begin{tabular}{p{0.34\columnwidth} r p{0.44\columnwidth}}
+\caption{Inner-solver swap inside NLF's BPR congestion solve (no fold): the outer method is fixed and
+only the near-linear inner Laplacian solve changes, LAMG+ vs.\ approximate Cholesky (both $\Om$);
+sparse-direct is shown for reference. Wall-clock seconds and outer (chord-Newton) steps; all run to a
+$10^{-7}$ residual. \emph{Every solver returns the identical equilibrium}---the dual energy agrees to
+the digits shown and the LAMG+/approxChol flows to $\le10^{-9}$ relative ($\Delta f$). $t_{\mathrm{L}}/t_{\mathrm{A}}{>}1$
+means approxChol is faster. Direct wins on small well-separated graphs and loses on the
+poorly-separable ones (\texttt{p2p-Gnutella}, \texttt{as-caida}); its scaling is the separate axis of
+\S\ref{sec:vsdirect}. Representative cross-class subset; the swap script and full output are in the
+released artifact.}\label{tab:innerswap}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{llrrrrrrr}
 \toprule
-regime & graphs & outcome\\
+graph & class & $m$ & energy $E$ & LAMG+ (stp) & approxChol (stp) & direct & $t_{\mathrm{L}}/t_{\mathrm{A}}$ & $\Delta f$\\
 \midrule
-both competitors converge (well-conditioned) & $1{,}137$ & NLF $\le$ both (median $2.6\times$/$4.2\times$ faster than Ipopt/L-BFGS)\\
-ill-conditioned (first-order degrades) & $389$ & L-BFGS exceeds $5\times$ NLF; NLF, Ipopt converge\\
-poorly-separable (direct fills in) & $51$ & Ipopt over budget (fill-in); NLF, L-BFGS converge\\
-\textbf{both over budget $\Rightarrow$ union} & \textbf{$92$} & \textbf{NLF is the only solver that finishes}\\
-\midrule
-\textbf{total} & \textbf{$1{,}669$} & \textbf{NLF $100\%$ converged; fastest-or-only on $85\%$}\\
+\texttt{3elt}          & 2D mesh     & 13{,}722  & $-0.8939$ & $0.064$ (16) & $0.11$ (21) & $0.023$ & $0.6$ & $4\!\times\!10^{-9}$\\
+\texttt{airfoil1}      & 2D FEM      & 12{,}289  & $-0.9866$ & $0.05$ (18) & $0.015$ (21) & $0.018$ & $3.3$ & $8\!\times\!10^{-10}$\\
+\texttt{bodyy5}        & aniso.\ FEM & 55{,}346  & $-0.9045$ & $0.64$ (18) & $0.074$ (22) & $0.19$  & $8.7$ & $7\!\times\!10^{-10}$\\
+\texttt{bcsstk38}      & structural  & 173{,}714 & $-0.0432$ & $0.23$ (15) & $0.23$ (21)  & $0.20$  & $1.0$ & $2\!\times\!10^{-10}$\\
+\texttt{G2\_circuit}   & circuit     & 288{,}286 & $-1.9134$ & $2.60$ (21) & $0.86$ (24)  & $1.09$  & $3.0$ & $8\!\times\!10^{-11}$\\
+\texttt{fe\_ocean}     & FEM mesh    & 409{,}593 & $-1.0609$ & $3.94$ (18) & $1.00$ (24)  & $3.09$  & $3.9$ & $7\!\times\!10^{-11}$\\
+\texttt{p2p-Gnutella04}& P2P         & 39{,}994  & $-3.1625$ & $0.14$ (24) & $0.080$ (25) & $0.94$  & $1.7$ & $3\!\times\!10^{-11}$\\
+\texttt{as-caida}      & AS/comm     & 53{,}381  & $-6.6601$ & $0.19$ (20) & $0.071$ (23) & $0.33$  & $2.7$ & $2\!\times\!10^{-10}$\\
+\texttt{delaunay\_n16} & planar      & 196{,}575 & $-0.5089$ & $2.47$ (18) & $0.44$ (22)  & $0.58$  & $5.6$ & $6\!\times\!10^{-10}$\\
+\texttt{web-NotreDame} & web         & 1{,}090{,}108 & $-25.957$ & $4.49$ (27) & $3.50$ (29) & $5.56$ & $1.3$ & $3\!\times\!10^{-10}$\\
 \bottomrule
-\end{tabular}
+\end{tabular}}
 \end{table}
-
-\begin{figure}[t]\centering
-\includegraphics[width=0.76\textwidth]{nlf_frontier.pdf}
-\caption{Inner-solver robustness frontier over $1{,}669$ SuiteSparse graphs (undirected BPR congestion):
-each point is a graph, placed by a conditioning proxy ($x$: L-BFGS-on-dual iterations) and a
-separability proxy ($y$: Ipopt time / NLF time), colored by outcome. First-order (L-BFGS) runs over
-budget toward the right (ill-conditioned); sparse-direct (Ipopt) toward the top (poorly-separable); in
-the upper right \emph{both} exceed the $5\times$NLF budget and NLF/multigrid is the only solver that
-finishes. NLF converged on all $1{,}669$.}\label{fig:frontier}
-\end{figure}
 
 What the outer loop freezes and lazily refreshes is the inner Laplacian solve itself---whether a
 multigrid hierarchy or a sparse approximate factorization---applied to the nonlinear residual; the
@@ -700,7 +692,7 @@ We are careful about what it shows: these Erd\H{o}s--R\'enyi graphs are \emph{we
 win over the IPM is its KKT \emph{fill-in}, and \emph{any} matrix-free solver inherits it---a
 first-order L-BFGS on the dual ties NLF here (Table~\ref{tab:robustness}). The advantage at scale on
 this class is ``avoid factorization,'' not ``use multigrid''; multigrid's distinctive value appears on
-ill-conditioned graphs (Table~\ref{tab:robustness}, \S\ref{sec:inner}).
+ill-conditioned graphs (Table~\ref{tab:robustness}, \S\ref{sec:frontier}).
 
 \begin{table}[t]\centering\small
 \caption{Scaling on poorly-separable (Erd\H{o}s--R\'enyi) graphs with BPR cost: NLF (Algorithm~\ref{alg:cont},
@@ -767,8 +759,73 @@ per-edge cost flat at ${\approx}2.4~\mu$s/edge median. (B)~cycle count: a flat d
 (median $18$, range $6$--$33$).}\label{fig:corpus}
 \end{figure}
 
+\subsection{The three-paradigm robustness frontier}\label{sec:frontier}
+The inner swap of \S\ref{sec:inner} shows the two \emph{near-linear} engines are interchangeable. The
+prior question is why a multigrid-class inner at all, rather than the other two solver paradigms one
+could plug into the same outer loop: a \emph{sparse-direct} KKT/Jacobian solve (what an interior-point
+method uses), or a \emph{matrix-free first-order} method. Because \eqref{eq:master} is a single convex
+problem, one can even bypass the Newton inner solve entirely and minimize the dual energy
+\eqref{eq:dual} by a quasi-Newton method (L-BFGS on the dual); on individual \emph{well-conditioned}
+graphs this matches NLF in wall-clock---so NLF's speed-up over the interior-point method on the
+well-conditioned poorly-separable instances of \S\ref{sec:bprscale} is a \emph{fill-in} effect any
+matrix-free solver inherits, not a property of multigrid. But that parity is the exception. We ran all
+three paradigms---NLF (multigrid-Newton), Ipopt (interior-point / sparse-direct KKT), and
+L-BFGS-on-the-dual (matrix-free first-order)---on the \emph{same} undirected BPR congestion program
+across the SuiteSparse corpus---the $1{,}669$ graphs completed under the heavier three-solver protocol,
+of the $2{,}003$ in the single-solver sweep (\S\ref{sec:corpus}); the remainder are the largest, where
+the sparse-direct competitor is increasingly size-limited. Each competitor is capped at $5\times$ the
+measured NLF wall-clock (a $1$\,s floor and a $120$\,s ceiling; Table~\ref{tab:robustness},
+Fig.~\ref{fig:frontier}). \textbf{NLF converged on every graph ($100\%$); within that budget the
+first-order method did not finish on $481$ of $1{,}669$ and the interior-point method on $143$}---of the
+latter, eight reach the $120$\,s ceiling, two are too large to factor, and the rest ran slower than
+$5\times$NLF. Where the competitors \emph{do} converge, NLF is a median $2.6\times$ faster than Ipopt
+and $4.2\times$ faster than L-BFGS, and it is the fastest-or-only solver on $85\%$ of the corpus. The
+two limiting modes are the two axes: a preconditioner-free first-order method slows as the
+conductance-weighted Laplacian ill-conditions ($\kappa(J)$ large---e.g.\ grids, $\kappa\sim N$,
+$\Theta(\sqrt N)$ iterations), while sparse-direct fills in as separators worsen. \textbf{Multigrid is
+the inner default because it is the only paradigm that stays within budget on \emph{both} axes}: on $90$
+corpus graphs neither competitor finishes within $5\times$NLF---they sit at the hard corner of both axes
+(first-order to a median $200$ and up to $1{,}037$ dual iterations; sparse-direct filling in)---while NLF
+does. This is where NLF's speed and robustness compound; it is not a claim that the others cannot
+converge given unbounded time ($2$ further graphs are also too large for sparse-direct;
+Fig.~\ref{fig:frontier}, upper right). On any single well-behaved class a simpler inner solve suffices;
+across the real-world corpus, multigrid is the robust choice.
+
+\begin{table}[t]\centering\small
+\caption{Three-paradigm robustness frontier across the SuiteSparse corpus ($1{,}669$ graphs, undirected
+BPR congestion---the same convex program for all). NLF (multigrid-Newton) vs.\ Ipopt
+(interior-point/sparse-direct KKT) vs.\ L-BFGS-on-the-dual (matrix-free first-order); each competitor
+capped at $5\times$ the measured NLF wall-clock ($1$\,s floor, $120$\,s ceiling). NLF converges on every
+graph and is the only paradigm that stays within budget on both axes. Of the $92$ union graphs neither
+competitor finishes within $5\times$NLF on $90$; $2$ more also exceed the sparse-direct size limit
+(``within budget'' is a wall-clock criterion, not a claim the others cannot converge given more time).
+Fig.~\ref{fig:frontier} plots the frontier.}\label{tab:robustness}
+\begin{tabular}{p{0.34\columnwidth} r p{0.44\columnwidth}}
+\toprule
+regime & graphs & outcome\\
+\midrule
+both competitors converge (well-conditioned) & $1{,}137$ & NLF $\le$ both (median $2.6\times$/$4.2\times$ faster than Ipopt/L-BFGS)\\
+ill-conditioned (first-order degrades) & $389$ & L-BFGS exceeds $5\times$ NLF; NLF, Ipopt converge\\
+poorly-separable (direct fills in) & $51$ & Ipopt over budget (fill-in); NLF, L-BFGS converge\\
+\textbf{both over budget $\Rightarrow$ union} & \textbf{$92$} & \textbf{NLF is the only solver that finishes}\\
+\midrule
+\textbf{total} & \textbf{$1{,}669$} & \textbf{NLF $100\%$ converged; fastest-or-only on $85\%$}\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]\centering
+\includegraphics[width=0.76\textwidth]{nlf_frontier.pdf}
+\caption{Three-paradigm robustness frontier over $1{,}669$ SuiteSparse graphs (undirected BPR congestion):
+each point is a graph, placed by a conditioning proxy ($x$: L-BFGS-on-dual iterations) and a
+separability proxy ($y$: Ipopt time / NLF time), colored by outcome. First-order (L-BFGS) runs over
+budget toward the right (ill-conditioned); sparse-direct (Ipopt) toward the top (poorly-separable); in
+the upper right \emph{both} exceed the $5\times$NLF budget and NLF/multigrid is the only solver that
+finishes. NLF converged on all $1{,}669$.}\label{fig:frontier}
+\end{figure}
+
 \subsection{Direct vs.\ multigrid inner: the separability axis}\label{sec:vsdirect}
-The corpus comparison of \S\ref{sec:inner} (Fig.~\ref{fig:frontier}) already pits the multigrid inner
+The three-paradigm comparison of \S\ref{sec:frontier} (Fig.~\ref{fig:frontier}) already pits the multigrid inner
 against sparse-direct factorization; we confirm the mechanism by swapping \emph{NLF's own} inner engine
 between LAMG+ and a sparse-direct factorization of the same Jacobian, the nonlinear solve held fixed.
 The determinant is graph \emph{separability}, not size: on good-separator graphs---2D/3D meshes,
