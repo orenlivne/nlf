@@ -363,7 +363,7 @@ $J(\phi)=B\,\mathrm{diag}(\rho'(B^{\top}\phi))B^{\top}$
 where $J_H=B\,\mathrm{diag}(\rho'(B^{\top}\phi_{\mathrm{build}}))B^{\top}$ is the linearization
 $H$ was built from: inner solve(s) with $H$ starting from $\delta=0$, stopped when
 $\|r - J_H\,\delta\| \le \eta\,\|r\|$
-\State \textbf{line search:} for $\tau=1,\tfrac12,\tfrac14,\dots$ find the first $\tau$ with
+\State \textbf{line search:} for $\tau=1,\tfrac12,\tfrac14,\dots,\frac{1}{2^{49}}$ find the first $\tau$ with
 $\big\|\alpha d - B\rho\big(B^{\top}(\phi+\tau\delta)\big)\big\| \le \|r\|$
 \If{line search succeeded} $\phi\gets\phi+\tau\delta$
 \ElsIf{$H$ was stale (built before this iteration)} rebuild $H$ from current $J(\phi)$;
@@ -385,9 +385,7 @@ can overshoot right after a load increase where the law's curvature is strongest
 halving and accepting the first non-increasing residual guarantees monotone progress at negligible
 cost. Near the solution the full step is always accepted (one trial, $\tau=1$).
 
-\paragraph{When the setup is refreshed} This happens when one of the following three conditions trigger: (i) no setup yet; (ii) the per-step residual factor exceeded $0.25$---the frozen $J$ has drifted too far from the current linearization; (iii) the line search stalled on a stale setup. In that case, we first refresh $H$ with the current linearization $J(\phi)$ and retry the line search. If it still fails, we break and report a convergence failure.
-
-Measured across the corpus of \S\ref{sec:corpus}, a handful of refreshes per solve suffice (often just one).
+\paragraph{When the setup is refreshed} This happens when one of the following three conditions trigger: (i) no setup yet; (ii) the per-step residual factor exceeded $0.25$---the frozen $J$ has drifted too far from the current linearization; (iii) the line search stalled on a stale setup. In that case, we first refresh $H$ with the current linearization $J(\phi)$ and retry the line search. If it still fails, we break and report a convergence failure. Measured across the corpus of \S\ref{sec:corpus} the number of refreshes is small (often just one). A lazy setup refresh is $1.5$--$4.7\times$ faster than refreshing on every Newton step.
 
 \paragraph{Deep hierarchies (LAMG+ engine only)} The multigrid engine needs one piece of care on
 graphs of huge diameter (${\ge}20$-level hierarchies: country-scale roads, large FEM meshes), where the
@@ -395,13 +393,7 @@ source--sink dipole right-hand side maximally excites the longest-wavelength mod
 schedule under-treats. Such hierarchies run a \emph{grown} cycle index ($1.15\times$ per level,
 per-level cap $\gamma_l\tau_l\le0.95$, so each cycle remains $\Om$), regrown and the solve restarted if
 the factor exceeds $0.6$. This engages on $11$ of $2{,}003$ corpus graphs ($0.5\%$) and restores
-textbook behavior (a \texttt{roadNet-PA} $100$-cycle stall becomes $5$). The approximate-Cholesky
-engine, having no cycle schedule, sidesteps this entirely.
-
-\paragraph{Relation to full global linearization} Rebuilding the setup every step computes the
-same iterates at $\Om$ complexity but pays the setup at each step: measured across network and graph
-classes, $1.5$--$4.7\times$ slower wall-clock (\texttt{refresh}$=0$ enables this). The one-shot FAS
-alternative is examined and sealed in \S\ref{sec:fasfail}.
+textbook behavior (a \texttt{roadNet-PA} $100$-cycle stall reduces to $5$ cycles).
 
 \subsection{Continuation through the fold (saturating laws only)}\label{sec:continuation}
 For the no-fold congestion class, the whole solver is Algorithm~\ref{alg:fixed} inside a short load
