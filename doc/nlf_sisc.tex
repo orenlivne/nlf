@@ -405,8 +405,9 @@ For the saturating/fold class, $\alpha$ is the unknown maximizer. A fixed-$\alph
 feasible iff $\alpha<F^*$ (the min-cut value), and as $\alpha\uparrow F^*$ the solution curve
 \emph{folds}---$\alpha(V)$ flattens onto the asymptote $F^*$ while the potentials grow without
 bound (Fig.~\ref{fig:cusp}); at the fold $\kappa(J)\sim(F^*-\alpha)^{-1}$ and the source--sink gap
-is $V=|\phi_s-\phi_t|\sim-\log(F^*-\alpha)$. Stepping $\alpha$ itself is therefore the worst
-choice: the feasible loads crowd at the fold and the step is forced to zero. The well-conditioned
+is $V=|\phi_s-\phi_t|\sim-\log(F^*-\alpha)$, so $dV/d\alpha\sim(F^*-\alpha)^{-1}\to\infty$.
+Stepping $\alpha$ itself is therefore the worst choice: the feasible loads crowd at the fold
+(a bounded-state step needs $\Delta\alpha\sim(F^*-\alpha)\to0$) and the step is forced to zero. The well-conditioned
 variable is the \emph{cut-mode amplitude}
 $\psi=\chi^{\top}\phi\sim-\log(F^*-\alpha)$,\footnote{Justification of both asymptotics. Near the fold
 $\phi=V\chi+O(1)$, $\chi$ the source-side indicator, so every cut edge carries gradient
