@@ -446,14 +446,14 @@ along it (Hence
 is linearized to its tangent plane $N=0$.) One Newton step on $(r,N)=0$ is the bordered linear system
 \begin{equation}\label{eq:bordered}
 \begin{bmatrix} J & -d\\ \dot\phi^{\top} & \dot\alpha\end{bmatrix}
-\begin{bmatrix}\delta\phi\\ \delta\alpha\end{bmatrix}=\begin{bmatrix}r\\ -N\end{bmatrix},
+\begin{bmatrix}\delta\phi\\ \delta\alpha\end{bmatrix}=\begin{bmatrix}r\\ -N\end{bmatrix}.
 \end{equation}
-whose block-elimination of $\delta\alpha$---with $u=J^{+}d$ and $w=J^{+}r$, two applications of the
-inner Laplacian solver---is
+Block elimination of $\delta\alpha$ gives
 \begin{equation}\label{eq:deflate}
 \delta\alpha=-\,\frac{\dot\phi^{\top}w+N}{\dot\alpha+\dot\phi^{\top}u},\qquad
-\delta\phi=\delta\alpha\,u+w .
+\delta\phi=\delta\alpha\,u+w ,
 \end{equation}
+where $u=J^{+}d$ and $w=J^{+}r$ are computed by two applications of the inner Laplacian solver.
 Both $u,w\in\mathrm{range}(J^{+})=\chi^{\perp}$: the near-null cut component of the solution (the
 $\chi$ direction) is pinned by the scalar arclength row \eqref{eq:arclength}, not by these solves. The
 border keeps the system nonsingular through the fold ($\kappa=\mathcal{O}(10^3)$ while
@@ -481,13 +481,7 @@ likewise approximate Cholesky's PCG).
 \end{algorithmic}
 \end{algorithm}
 
-The refresh policy of \S\ref{sec:fas} is woven into the corrector as a \emph{staleness safeguard}
-(the corrector step of Algorithm~\ref{alg:cont}, Case~B). The conductances drain exponentially in the cut amplitude, so
-the frozen hierarchy ages faster as the fold sharpens. In experiments, the monitor refreshes about every
-$4$ steps at $0.97F^*$ and every $2$ at $0.995F^*$. The tangent solve, the direction
-most sensitive to $J$'s drift, always uses a fresh hierarchy (once per accepted step). With these,
-the solver converges to machine precision at fixed loads up to $0.995F^*$ (relative residual
-${\sim}10^{-14}$) and tracks the tight-tolerance continuation without stalling.
+The refresh policy of \S\ref{sec:fas} is woven into the corrector as a staleness safeguard (Algorithm~\ref{alg:cont}, Case~B). Both $u$ and $w$ computations reuse one frozen hierarchy; since the cut conductances drain exponentially in the cut amplitude, that hierarchy ages faster as the fold sharpens, and the monitor rebuilds it more often — about every 4 arclength steps at $0.97 F^*$, every 2 at $0.995 F^*$. The predictor's tangent $\phi = J^{+}d$, the single direction most sensitive to J's drift, is instead recomputed on a fresh hierarchy once per accepted step. The fixed-load solution remains machine-precise as close to the fold as $\alpha = 0.995 F^*$ (a fixed-$\alpha$ equilibrium is well-posed only for $\alpha < F^*$), while the arclength continuation tracks through the fold to the exact F* without stalling (Table~\ref{tab:mf}).
 
 \begin{figure}[t]\centering
 \includegraphics[width=0.74\textwidth]{cusp.pdf}
