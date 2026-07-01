@@ -422,7 +422,7 @@ which loads only the cut edges); for a \emph{simple} fold the next eigenvalue st
 deflated spectral gap) and $\lambda_{\max}(J)=\Theta(1)$, so the bound is two-sided and
 $\kappa(J)\sim(F^*-\alpha)^{-1}$.}
 $\chi$ the (a priori unknown) min-cut indicator. We realize this by standard \textbf{pseudo-arclength
-continuation}~\cite{keller,allgower-georg} (Algorithm~\ref{alg:cont}, right), which never forms
+continuation}~\cite{keller,allgower-georg} (Algorithm~\ref{alg:cont}, Case~B), which never forms
 $\chi$: the novelty is not the continuation but \emph{what folds}---a graph-Laplacian whose singular
 direction is the min-cut indicator---and that the inner solve is $\Om$ multigrid. The solution-curve
 tangent satisfies $J\dot\phi=\dot\alpha\,d$,
@@ -451,22 +451,40 @@ system nonsingular through the fold ($\kappa=\mathcal{O}(10^3)$ while $\kappa(J)
 \caption{NLF continuation.}
 \label{alg:cont}
 \begin{algorithmic}[1]
-\State Set $\alpha\gets 0$, $\phi \gets 0$, $H \gets \emptyset$.
-\State \textbf{No fold ($\alpha$ given):}
-  For $\ell=\tfrac14,\tfrac12,1$: run Algorithm~\ref{alg:fixed} at load $\ell\alpha$,
-  warm-started from previous $\phi$, $H$ shared. \textbf{return} $\phi$
-\State \textbf{Fold ($\alpha$ unknown, find $F^*$):} Climb $\alpha$ geometrically (each load by Algorithm~\ref{alg:fixed}) until infeasible.
-\State refresh $H$; tangent $(\dot\phi,\dot\alpha)$ by \eqref{eq:tangent}
-\State predictor: $(\phi,\alpha)\mathrel{+}= \Delta s\,(\dot\phi,\dot\alpha)$; corrector: iterate
-\eqref{eq:bordered} with line search, $H$ frozen (refresh on factor $>0.25$ or stall; a corrector
-that fails on a \emph{stale} $H$ is retried once at the same $\Delta s$ with a fresh one---only a
-fresh-$H$ failure halves $\Delta s$)
-\State on success grow $\Delta s$; stop when $\dot\alpha\to0$ (the fold): $\alpha=F^*$. Else go to 3
+\Require demand $d$; either a target load $\alpha$ (\textbf{Case~A}) or the request to maximize $\alpha$ (\textbf{Case~B})
+\State $\phi \gets 0$, $\ H \gets \emptyset$ \Comment{trivial solution at $\alpha=0$}
+\Statex
+\State \textbf{Case A --- congestion, $\alpha$ given} ($\alpha$-continuation, fixed steps):
+\For{$\ell = \tfrac14,\ \tfrac12,\ 1$}
+  \State $\phi \gets$ Algorithm~\ref{alg:fixed} at load $\ell\alpha$, warm-started from $\phi$, sharing $H$
+\EndFor
+\State \Return $\phi$
+\Statex
+\State \textbf{Case B --- max-flow, $\alpha$ unknown} (bracket $F^*$, then pseudo-arclength):
+\State $\alpha \gets$ feasible fraction of the source-cut bound $\alpha_{\mathrm{hi}} \ge F^*$
+\While{\textbf{true}} \Comment{geometric climb brackets $F^*$}
+  \State $(\phi',\ \textit{converged}) \gets$ Algorithm~\ref{alg:fixed} at load $1.7\,\alpha$, warm-started from $\phi$
+  \If{\textbf{not} \textit{converged}}
+    \State \textbf{break} \Comment{$1.7\alpha \ge F^*$: no equilibrium exists, so the fixed-$\alpha$ solve cannot converge}
+  \EndIf
+  \State $\alpha \gets 1.7\,\alpha$, $\ \phi \gets \phi'$ \Comment{keep the largest feasible load}
+\EndWhile
+\State refresh $H$; tangent $(\dot\phi,\dot\alpha)$ by \eqref{eq:tangent}; initialize arc-step $\Delta s$
+\While{$|\dot\alpha| > \mathrm{tol}$} \Comment{$\dot\alpha \to 0$ is the fold}
+  \State predictor: $(\phi,\alpha)\mathrel{+}= \Delta s\,(\dot\phi,\dot\alpha)$
+  \State corrector: iterate \eqref{eq:bordered} to tolerance with line search, $H$ lazily refreshed as in Algorithm~\ref{alg:fixed}
+  \If{corrector converged}
+    \State grow $\Delta s$; refresh and reorient the tangent by \eqref{eq:tangent}
+  \Else
+    \State $\Delta s \gets \Delta s / 2$ \Comment{fresh-$H$ failure: shrink arc-step and re-predict}
+  \EndIf
+\EndWhile
+\State \Return $\phi$, $\ F^* = \alpha$
 \end{algorithmic}
 \end{algorithm}
 
 The refresh policy of \S\ref{sec:fas} is woven into the corrector as a \emph{staleness safeguard}
-(Algorithm~\ref{alg:cont}, step 4). The conductances drain exponentially in the cut amplitude, so
+(the corrector step of Algorithm~\ref{alg:cont}, Case~B). The conductances drain exponentially in the cut amplitude, so
 the frozen hierarchy ages faster as the fold sharpens---measured, the monitor refreshes about every
 $4$ steps at $0.97F^*$ and every $2$ at $0.995F^*$, automatically; the tangent solve, the direction
 most sensitive to $J$'s drift, always uses a fresh hierarchy (once per accepted step). With these,
