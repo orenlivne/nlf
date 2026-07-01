@@ -484,11 +484,20 @@ likewise approximate Cholesky's PCG).
 The refresh policy of \S\ref{sec:fas} is woven into the corrector as a staleness safeguard (Algorithm~\ref{alg:cont}, Case~B). Both $u$ and $w$ computations reuse one frozen hierarchy; since the cut conductances drain exponentially in the cut amplitude, that hierarchy ages faster as the fold sharpens, and the monitor rebuilds it more often — about every 4 arclength steps at $0.97 F^*$, every 2 at $0.995 F^*$. The predictor's tangent $\phi = J^{+}d$, the single direction most sensitive to J's drift, is instead recomputed on a fresh hierarchy once per accepted step. The fixed-load solution remains machine-precise as close to the fold as $\alpha = 0.995 F^*$ (a fixed-$\alpha$ equilibrium is well-posed only for $\alpha < F^*$), while the arclength continuation tracks through the fold to the exact F* without stalling (Table~\ref{tab:mf}).
 
 \begin{figure}[t]\centering
-\includegraphics[width=0.74\textwidth]{cusp.pdf}
-\caption{The $\alpha$--$V$ fold (max-flow). As the load $\alpha$ is driven up, the source--sink gap
-$V=|\phi_s-\phi_t|$ grows; $\alpha$ rises, then folds onto the min-cut value $F^*$ as the cut
-saturates ($\rho'\to0$, $J$ singular) with $V\sim-\log(F^*-\alpha)$. Stepping $\alpha$ crowds the
-fold; continuing in $V\approx\psi$ keeps steps uniform. Congestion laws have no such fold.}\label{fig:cusp}
+\begin{minipage}[b]{0.512\textwidth}\centering\includegraphics[width=\linewidth]{cusp.pdf}\\{\footnotesize(a)}\end{minipage}\hfill
+\begin{minipage}[b]{0.447\textwidth}\centering\includegraphics[width=\linewidth]{arclength.pdf}\\{\footnotesize(b)}\end{minipage}
+\caption{\textbf{(a)}~The $\alpha$--$V$ fold (max-flow). As the load $\alpha$ is driven up, the
+source--sink gap $V=|\phi_s-\phi_t|$ grows; $\alpha$ rises, then folds onto the min-cut value $F^*$ as
+the cut saturates ($\rho'\to0$, $J$ singular) with $V\sim-\log(F^*-\alpha)$. Stepping $\alpha$ crowds
+the fold; continuing in $V\approx\psi$ keeps steps uniform. Congestion laws have no such fold.
+\textbf{(b)}~Pseudo-arclength predictor--corrector, drawn where $\phi,\alpha$ are both scalars so the
+equilibria form a plane curve $\rho(\phi)=\alpha d$. From the previous solution the \emph{predictor}
+advances $\Delta s$ along the unit tangent $(\dot\phi,\dot\alpha)$ to an off-curve point $P^*$; the
+\emph{corrector} drives the equilibrium residual $r$ and the arclength residual $N$ to zero through the
+bordered system \eqref{eq:bordered}. Its Newton step splits as $\delta\phi=\delta\alpha\,u+w$ (block
+elimination \eqref{eq:deflate}) with $u=J^{+}d$ along the tangent and $w=J^{+}r$ cancelling $r$; near
+the fold $u\propto\chi/\lambda_{\min}$ is large but is pinned by the scalar arclength row, so the inner
+solves stay well-conditioned.}\label{fig:cusp}
 \end{figure}
 
 \section{Transportation: undirected congestion equilibrium}\label{sec:traffic}
