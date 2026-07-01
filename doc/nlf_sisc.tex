@@ -65,7 +65,7 @@ where $B$ is the node--edge incidence matrix, $\phi$ the node potentials, $d$ a 
 $\alpha$ a load, and $\rho_e$ a monotone edge law that alone encodes the physics: a
 saturating $\rho_e$ gives a hard capacity (max flow); a gently rising $\rho_e$ gives a congestion
 cost (traffic)\footnote{Notation: $\rho$ acts componentwise and $\rho_e$ denotes the law on an individual edge $e$.}. The flow is $f_e=\rho_e\big((B^{\top}\phi)_e\big)$, and every Newton linearization of
-\eqref{eq:master} is an ordinary weighted graph Laplacian $J=B\,\mathrm{diag}(\rho')B^{\top}$. To obtain a fast \emph{nonlinear} solver, we use an inexact chord-Newton iteration with the linearization frozen across most steps, lazily refreshed. Furthermore, we weave a continuation in $\alpha$ into the same Newton loop. The nonlinear solve costs $2$--$4$ linear Laplacian solves (\S\ref{sec:accuracy}). Any near-linear
+\eqref{eq:master} is an ordinary weighted graph Laplacian $J=B\,\mathrm{diag}(\rho')B^{\top}$. For congestion and routing problems $\alpha$ is a given input; for maximum flow, $\alpha$ is an unknown to be maximized. To obtain a fast \emph{nonlinear} solver, we use an inexact chord-Newton iteration with the linearization frozen across most steps, lazily refreshed. Furthermore, we weave a continuation in $\alpha$ into the same Newton loop. The nonlinear solve costs $2$--$4$ linear Laplacian solves (\S\ref{sec:accuracy}). Any near-linear
 Laplacian solver can serve as the inner engine; we default to approximate Cholesky~\cite{approxchol},
 the faster engine across the corpus at equal robustness (\S\ref{sec:ablation}), with
 LAMG+~\cite{lamgplus} interchangeable in robustness (its constant differs by graph class). One incidental convenience of LAMG+'s
@@ -242,18 +242,18 @@ and $J$.
 \subsection{The fold dichotomy} The single feature that governs difficulty is whether the edge law
 \emph{saturates}. Table~\ref{tab:instances} lists three standard instances.
 \begin{itemize}[leftmargin=1.4em,itemsep=1pt]
-\item \emph{Hard capacity (saturating $\rho$, conductance $\to0$).} The flow cannot exceed a capacity
-$c_e$, so $\rho_e$ is bounded and $\rho'_e\to0$ as the edge saturates. As the load rises to a
-\emph{feasibility limit}, the saturating edges form a cut and $J$ \emph{folds}---a continuation
-turning (limit) point where $\alpha$ caps at the min cut $F^*$ and $J$ becomes singular. Maximum flow and minimum-delay communication routing
-(Kleinrock delay) are of this type; they need continuation through
-the fold (\S\ref{sec:continuation}).
-\item \emph{Soft congestion (rising $\rho$, no saturation).} The cost rises with flow but
+\item \emph{Soft congestion (rising $\rho$, no saturation).} The load $\alpha$ is a given input. The cost rises with flow but
 imposes no hard cap, so $\rho_e$ is unbounded and the law never \emph{saturates}: $\rho'_e>0$ at every
 finite flow (for BPR $\rho'_e$ is large near free flow and decays as $f$ grows, but never reaches $0$).
 Hence $J$ is nonsingular at every equilibrium---no feasibility limit and no fold.
-Traffic assignment with the BPR cost is of this type; on its bounded-flow equilibria $J$ is
-well-conditioned and NLF needs no continuation (\S\ref{sec:traffic}).
+Traffic assignment with BPR cost is of this type; on its bounded-flow equilibria $J$ is
+well-conditioned and continuation is performed in $\alpha$ from $0$ to the target value (\S\ref{sec:traffic}).
+\item \emph{Hard capacity (saturating $\rho$, conductance $\to0$).} $\alpha$ is an unknown to be maximized. The flow cannot exceed a capacity
+$c_e$, so $\rho_e$ is bounded and $\rho'_e\to0$ as the edge saturates. As $\alpha$ rises to a
+feasibility limit, the saturating edges form a cut and $J$ \emph{folds}---a continuation
+limit point where $\alpha$ caps at the min cut $F^*$ and $J$ becomes singular. Maximum flow and minimum-delay communication routing
+(Kleinrock delay) are of this type; they reqire arclength continuation through
+the fold (\S\ref{sec:continuation}).
 \end{itemize}
 
 \begin{table}[t]\centering\small
@@ -385,7 +385,7 @@ can overshoot right after a load increase where the law's curvature is strongest
 halving and accepting the first non-increasing residual guarantees monotone progress at negligible
 cost. Near the solution the full step is always accepted (one trial, $\tau=1$).
 
-\paragraph{When the setup is refreshed} Two conditions trigger a refresh \emph{before} computing the correction $\delta$: (i) no setup yet; (ii) the per-step residual factor exceeded $0.25$---the frozen $J$ has drifted too far from the current linearization. A third case arises \emph{after} the line search: (iii) if all $50$ halvings fail and $H$ was stale (built in a prior iteration), we rebuild $H$ from the current $J(\phi)$, recompute $\delta$, and retry the line search; if the retry still fails, or if $H$ was already fresh, we break. Measured across the corpus of \S\ref{sec:corpus} the number of refreshes is small (often just one). A lazy setup refresh is $1.5$--$4.7\times$ faster than refreshing on every Newton step.
+\paragraph{When the setup is refreshed} This happens when one of the following three conditions trigger: (i) no setup yet; (ii) the per-step residual factor exceeded $0.25$---the frozen $J$ has drifted too far from the current linearization; (iii) the line search stalled on a stale setup. In that case, we first refresh $H$ with the current linearization $J(\phi)$ and retry the line search. If it still fails, we break and report a convergence failure. Measured across the corpus of \S\ref{sec:corpus} the number of refreshes is small (often just one). A lazy setup refresh is $1.5$--$4.7\times$ faster than refreshing on every Newton step.
 
 \paragraph{Deep hierarchies (LAMG+ engine only)} The multigrid engine needs one piece of care on
 graphs of huge diameter (${\ge}20$-level hierarchies: country-scale roads, large FEM meshes), where the
