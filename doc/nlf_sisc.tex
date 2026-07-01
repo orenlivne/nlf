@@ -167,7 +167,7 @@ coarse-grid objective. However, Sec.~\ref{sec:dcopt} outlines how NLF might be e
 
 \emph{Combinatorial and transport-specific solvers.} Augmenting-path and push--relabel max-flow
 \cite{goldberg-tarjan,boykov-kolmogorov} and the almost-linear-time exact algorithm
-\cite{chen-almost-linear} target directed max/min-cost flow; Frank--Wolfe~\cite{frankwolfe} and
+\cite{chen-almost-linear} -- a theoretical breakthrough with galactic constants, not a practical implementation -- target  target directed max/min-cost flow; Frank--Wolfe~\cite{frankwolfe} and
 bush-based assignment (Algorithm~B~\cite{bargera2002}, TAPAS~\cite{bargera2010}) target the
 smooth-cost traffic program. Each is specialized to one problem class. NLF's contribution is
 orthogonal: a \emph{single} solver, parametrized by one edge law, that spans all of them and inherits
@@ -418,8 +418,8 @@ continuation}~\cite{keller,allgower-georg} (Algorithm~\ref{alg:cont}, Case~B), w
 $\chi$.
 
 The equilibria of \eqref{eq:master} trace a smooth curve $\big(\phi(s),\alpha(s)\big)$ as the load is
-varied; we parametrize it by its own \emph{arclength} $s$ and write a dot for the derivative along the
-curve, $\dot{(\cdot)}\equiv d(\cdot)/ds$, so the tangent $(\dot\phi,\dot\alpha)$ is a \emph{unit}
+varied; we parametrize it by its own arclength $s$ and write a dot for the derivative along the
+curve, $\dot{(\cdot)}\equiv d(\cdot)/ds$, so the tangent $(\dot\phi,\dot\alpha)$ is a unit
 vector, $\|\dot\phi\|^2+\dot\alpha^2=1$. Differentiating \eqref{eq:master} along $s$ gives it:
 \begin{equation}\label{eq:tangent}
 J\dot\phi=\dot\alpha\,d\quad\Longrightarrow\quad \dot\phi=J^{+}d,\ \ \dot\alpha=1,\ \ \text{then rescale to }\|(\dot\phi,\dot\alpha)\|=1 .
