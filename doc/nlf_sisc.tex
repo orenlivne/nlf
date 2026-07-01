@@ -441,8 +441,8 @@ N=\dot\phi^{\top}(\phi-\phi_0)+\dot\alpha\,(\alpha-\alpha_0)-\Delta s ,
 \end{equation}
 how far the point has advanced along the tangent past the previous solution $(\phi_0,\alpha_0)$, minus
 the target $\Delta s$. Setting $r=0$ holds the point on the equilibrium curve; $N=0$ fixes how far
-along it, \emph{replacing} the prescribed-$\alpha$ condition that fails at the fold. (Hence
-``\emph{pseudo}''-arclength: the exact arclength sphere $\|\delta\phi\|^2+\delta\alpha^2=\Delta s^2$
+along it (Hence
+``pseudo''-arclength: the exact arclength sphere $\|\delta\phi\|^2+\delta\alpha^2=\Delta s^2$
 is linearized to its tangent plane $N=0$.) One Newton step on $(r,N)=0$ is the bordered linear system
 \begin{equation}\label{eq:bordered}
 \begin{bmatrix} J & -d\\ \dot\phi^{\top} & \dot\alpha\end{bmatrix}
@@ -483,8 +483,8 @@ likewise approximate Cholesky's PCG).
 
 The refresh policy of \S\ref{sec:fas} is woven into the corrector as a \emph{staleness safeguard}
 (the corrector step of Algorithm~\ref{alg:cont}, Case~B). The conductances drain exponentially in the cut amplitude, so
-the frozen hierarchy ages faster as the fold sharpens---measured, the monitor refreshes about every
-$4$ steps at $0.97F^*$ and every $2$ at $0.995F^*$, automatically; the tangent solve, the direction
+the frozen hierarchy ages faster as the fold sharpens. In experiments, the monitor refreshes about every
+$4$ steps at $0.97F^*$ and every $2$ at $0.995F^*$. The tangent solve, the direction
 most sensitive to $J$'s drift, always uses a fresh hierarchy (once per accepted step). With these,
 the solver converges to machine precision at fixed loads up to $0.995F^*$ (relative residual
 ${\sim}10^{-14}$) and tracks the tight-tolerance continuation without stalling.
