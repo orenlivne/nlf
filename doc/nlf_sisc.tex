@@ -16,25 +16,23 @@
 
 \begin{abstract}
 We present \textbf{NLF} (Nonlinear Laplacian Flow), a unified framework and linear-time solver for
-convex network-flow equilibria. A broad class of flow problems---congestion (traffic) routing,
-minimum-delay communication routing, and maximum flow---is the stationarity of a convex,
-edge-separable energy and shares one form: a \emph{nonlinear graph Laplacian}
-$B\,\rho(B^{\top}\phi)=\alpha d$, where a monotone edge law $\rho_e$ encodes the physics. We consider undirected only graphs; directed,
-arc-based variants are future work. This is the standard optimality system of a convex, edge-separable network-flow program; what is new is the \emph{unification}, that one monotone edge law
-parametrizes all three problems, together with how it is solved: where electrical-flow
-and interior-point methods for flow drive an outer reweighting or barrier loop around
-linear Laplacian solves to reach an approximate optimum, NLF puts the nonlinearity
-in the edge law itself, so one energy encodes the problem exactly. NLF solves it by an inexact damped
-chord-Newton iteration whose frozen global linearization---itself a weighted graph Laplacian---is
-inverted by a lazily refreshed Laplacian solver. The framework is engine-agnostic. We default to approximate Cholesky (fastest), with LAMG+ interchangeable. NLF is empirically linear-time: each inner solve is $\Om$ where $m$ is the number of edges, and the whole nonlinear solve typically costs $2$--$4$ linear Laplacian solves. On single-commodity
-congestion over real road-network topologies
-(BPR cost), NLF is robust and converges for all $2{,}003$ SuiteSparse graphs up to $5.6\times10^7$ edges. Compared to state-of-the-art interior-point method (IPM), NLF was $2.6\times$ faster on average and $>45\times$ faster on poorly-separable graphs, where 
-the IPM's direct KKT core is superlinear. A matrix-free L-BFGS first-order method on the dual ties NLF on
-well-conditioned graphs, but NLF was $4.2\times$ faster on average, and was the only solver to finish on the $90$ hardest instances that are both ill-conditioned and poorly-separable. A multicommodity extension routes $K$ commodities through one shared hierarchy at $\mathcal{O}(Km)$
-per step---corpus-wide at $K=4$ ($3.8\times$ single-commodity cost)---and yields a measured finding:
-on real capacity data, congestion couples commodities by inflating shared-corridor costs (up to
-$8.8\times$), not by rerouting them. The same machinery recovers the exact combinatorial max-flow as
-a short sequence of Laplacian solves, with the cut potential as a by-product. Code and benchmarks: \url{https://github.com/orenlivne/nlf}.
+convex network-flow equilibria. Congestion (traffic) routing, minimum-delay communication
+routing, and maximum flow---each the stationarity of a convex, edge-separable energy---share one
+form: the \emph{nonlinear graph Laplacian} $B\,\rho(B^{\top}\phi)=\alpha d$, where a monotone
+edge law $\rho_e$ encodes the physics (undirected graphs; directed variants are future work).
+NLF solves it by an inexact damped chord-Newton iteration whose frozen global
+linearization---a weighted graph Laplacian---is inverted by a lazily refreshed near-linear
+Laplacian solver (engine-agnostic; default: approximate Cholesky, LAMG+ interchangeable).
+The whole nonlinear solve costs $2$--$4$ linear Laplacian solves. On single-commodity congestion
+over real road-network topologies (BPR cost), NLF converges for all $2{,}003$ SuiteSparse graphs
+(up to $5.6\times10^7$ edges); against a state-of-the-art interior-point method (IPM), NLF was
+$2.6\times$ faster on average and $>45\times$ on the poorly-separable graphs where the IPM's
+direct KKT core is superlinear; against matrix-free L-BFGS it was $4.2\times$ faster on average
+and the only solver to finish on the $90$ hardest instances. A multicommodity extension routes $K$
+commodities through one shared hierarchy at $\mathcal{O}(Km)$ per step; on real capacity data,
+congestion inflates shared-corridor costs (up to $8.8\times$) without rerouting. The same
+machinery recovers the exact combinatorial max-flow as a short sequence of Laplacian solves, with
+the cut potential as a by-product. Code and benchmarks: \url{https://github.com/orenlivne/nlf}.
 \end{abstract}
 
 \begin{keywords}
@@ -384,15 +382,9 @@ can overshoot right after a load increase where the law's curvature is strongest
 halving and accepting the first non-increasing residual guarantees monotone progress at negligible
 cost. Near the solution the full step is always accepted (one trial, $\tau=1$).
 
-\paragraph{When the setup is refreshed} This happens when one of the following three conditions trigger: (i) no setup yet; (ii) the per-step residual factor exceeded $0.25$---the frozen $J$ has drifted too far from the current linearization; (iii) the line search stalled on a stale setup. In that case, we first refresh $H$ with the current linearization $J(\phi)$ and retry the line search. If it still fails, we break and report a convergence failure. Measured across the corpus of \S\ref{sec:corpus} the number of refreshes is small (often just one). A lazy setup refresh is $1.5$--$4.7\times$ faster than refreshing on every Newton step.
+\paragraph{When the setup is refreshed} Three conditions trigger: (i)~no setup yet; (ii)~per-step residual factor $>0.25$ (frozen $J$ has drifted); (iii)~line-search stall on a stale $H$---rebuild and retry once; a fresh-$H$ stall breaks the loop. The corpus median refresh count is small (often one). A lazy refresh is $1.5$--$4.7\times$ faster than rebuilding every step.
 
-\paragraph{Deep hierarchies (LAMG+ engine only)} The multigrid engine needs one piece of care on
-graphs of huge diameter (${\ge}20$-level hierarchies: country-scale roads, large FEM meshes), where the
-source--sink dipole right-hand side maximally excites the longest-wavelength mode that the stock cycle
-schedule under-treats. Such hierarchies run a \emph{grown} cycle index ($1.15\times$ per level,
-per-level cap $\gamma_l\tau_l\le0.95$, so each cycle remains $\Om$), regrown and the solve restarted if
-the factor exceeds $0.6$. This engages on $11$ of $2{,}003$ corpus graphs ($0.5\%$) and restores
-textbook behavior (a \texttt{roadNet-PA} $100$-cycle stall reduces to $5$ cycles).
+\paragraph{Deep hierarchies (LAMG+ engine only)} On graphs with ${\ge}20$-level hierarchies (country-scale roads, large FEM meshes) the dipole right-hand side excites the longest mode that the stock cycle under-treats. A \emph{grown} cycle index ($1.15\times$ per level, cap $\gamma_l\tau_l\le0.95$, each cycle stays $\Om$) is used, restarted if the factor exceeds $0.6$. This engages on $11$ of $2{,}003$ graphs ($0.5\%$) and restores textbook convergence.
 
 \subsection{Continuation}\label{sec:continuation}
 Both problem classes use continuation from $\alpha=0$; they differ only in parametrization
@@ -459,7 +451,7 @@ system nonsingular through the fold ($\kappa=\mathcal{O}(10^3)$ while $\kappa(J)
 \State \Return $\phi$
 \Statex
 \State \textbf{Case B --- max-flow, $\alpha$ unknown} (bracket $F^*$, then pseudo-arclength):
-\State $\alpha \gets$ feasible fraction of the source-cut bound $\alpha_{\mathrm{hi}} \ge F^*$;\ \ fix growth factor $g>1$ (we use $g=1.7$)
+\State $\alpha_{\mathrm{hi}} \gets \sum_{e\sim s}c_e \ge F^*$ (source-cut bound); set $\alpha\gets0.1\,\alpha_{\mathrm{hi}}$, halve until Alg.~\ref{alg:fixed} converges (ensures $\alpha<F^*$); fix $g>1$ ($g{=}1.7$)
 \While{\textbf{true}} \Comment{geometric climb brackets $F^*$}
   \State $(\phi',\ \textit{converged}) \gets$ Algorithm~\ref{alg:fixed} at load $g\,\alpha$, warm-started from $\phi$
   \If{\textbf{not} \textit{converged}}
@@ -536,34 +528,18 @@ from the data; this regularizes the free-flow threshold so the dual problem is w
 capacity'' sentinels coded as uncapacitated links are given a large finite capacity.}
 
 \subsection{No combinatorial competitor; an interior-point baseline}\label{sec:competitor}
-Convex congestion flow is not a max-flow: augmenting-path and push--relabel do not apply, and no
-combinatorial algorithm solves \eqref{eq:primal}. The field's classical workhorse, \emph{un-accelerated} Frank--Wolfe on
-the traffic-assignment program~\cite{frankwolfe}, converges only sublinearly: on our Beckmann grid
-instances it needs an iteration count that grows with size to reach even a $10^{-4}$ relative duality
-gap (115 iterations at $n{=}144$) and cannot reach the high accuracy NLF attains---a textbook
-limitation of its $\mathcal{O}(1/k)$ rate. The transportation-specific high-accuracy state of the
-art is the \emph{bush-based} family (Bar-Gera's Algorithm~B~\cite{bargera2002} and
-TAPAS~\cite{bargera2010}); we sought a runnable open-source implementation for a same-instance
-head-to-head and could not obtain one---the maintained package AequilibraE failed to build in our
-environment, and a minimal reference Algorithm~B does not reach high accuracy---so we position the
-bush-based methods qualitatively and benchmark quantitatively against the strong, general
-high-accuracy baseline, \textbf{Ipopt}~\cite{ipopt}, a mature interior-point solver run on the
-identical program. This is conservative for NLF: Ipopt reaches the same $10^{-10}$ accuracy NLF
-does, whereas Frank--Wolfe and bush-based methods are specialized to the \emph{smooth-cost} program
-and---unlike NLF---do not address the saturating, linear-objective max-flow instance at all
-(\S\ref{sec:maxflow}). Ipopt's per-iteration cost is a sparse-direct factorization of the KKT system:
-cheap when the graph has good vertex separators, but its fill-in grows superlinearly when it does
-not---exactly the axis on which NLF's multigrid core is immune.
-
-To make the Frank--Wolfe comparison concrete we ran it on the convex Beckmann program over
-synthetic Sioux-Falls-like grids (Table~\ref{tab:fw}): the iteration count to a $10^{-4}$ duality gap
-is flat on tiny instances but grows sharply with size ($115$ iterations at $n{=}144$), and the
-$\mathcal{O}(1/k)$ rate cannot push the gap below ${\sim}10^{-4}$ at all. NLF reaches $10^{-10}$ in a
-flat $9$ continuation steps, independent of size (Table~\ref{tab:bprscale}). A minimal $250$-line
-bush-based Algorithm~B reference, run on the same instances, did not reach high accuracy (gaps
-$10^{-2}$--$10^{-1}$); the production bush-based and TAPAS solvers do, but no runnable open build was
-available for a same-instance head-to-head, so we benchmark Ipopt quantitatively and position the
-bush-based family qualitatively.
+No combinatorial algorithm addresses the convex congestion program \eqref{eq:primal}.
+Frank--Wolfe~\cite{frankwolfe} converges only sublinearly: the iteration count to a $10^{-4}$
+duality gap grows with size (Table~\ref{tab:fw}, $115$ at $n{=}144$) and the $\mathcal{O}(1/k)$
+rate cannot reach the high accuracy NLF attains. The field's high-accuracy standard, the
+\emph{bush-based} family (Algorithm~B~\cite{bargera2002}, TAPAS~\cite{bargera2010}), was
+unavailable for a same-instance head-to-head (AequilibraE failed to build; a minimal
+Algorithm~B reference did not reach high accuracy), so we position it qualitatively and
+benchmark quantitatively against \textbf{Ipopt}~\cite{ipopt}, a mature interior-point solver
+on the identical program. This is conservative: Ipopt attains the same $10^{-10}$, whereas
+Frank--Wolfe and bush-based methods do not address the max-flow instance (\S\ref{sec:maxflow}).
+Ipopt's per-step cost is a sparse-direct KKT factorization: cheap on planar graphs but
+fill-in grows superlinearly as separators worsen---exactly the axis on which NLF is immune.
 
 \begin{table}[t]\centering\small
 \caption{Frank--Wolfe on the convex Beckmann program (synthetic Sioux-Falls-like grids): iterations
@@ -699,23 +675,16 @@ per-edge cost flat at ${\approx}2.4~\mu$s/edge median. (B)~cycle count: a flat d
 \end{figure}
 
 \subsection{Why a near-linear inner: the paradigm frontier}\label{sec:frontier}
-The ablation below (\S\ref{sec:ablation}) picks the engine \emph{within} the near-linear class; first
-we justify the class itself, against the two other paradigms one could plug into the same outer
-loop---a \emph{sparse-direct} KKT/Jacobian solve (what an interior-point method uses) and a
-\emph{matrix-free first-order} method. (Because
-\eqref{eq:master} is convex one can even bypass the Newton inner solve and minimize the dual energy
-\eqref{eq:dual} by L-BFGS; on \emph{well-conditioned} graphs this ties NLF, so the speed-up over the
-interior-point method there is a \emph{fill-in} effect any matrix-free solver inherits, not a property
-of the inner.) We ran all three on the \emph{same} BPR program across the corpus---the $1{,}669$ graphs
-on which the heavier three-solver protocol completes, each competitor capped at $5\times$ NLF's
-wall-clock (Table~\ref{tab:robustness}). \textbf{NLF converged on all
-$1{,}669$}; within budget the first-order method failed on $481$ and the interior-point on $143$. The
-two failure modes are the two axes---first-order slows as $J$ ill-conditions ($\kappa\sim N$ on grids),
-sparse-direct fills in as separators worsen---and on the $90$ graphs at the hard corner of both,
-neither competitor finishes within $5\times$NLF while NLF does. Where they converge, NLF is a median
-$2.6\times$/$4.2\times$ faster than Ipopt/L-BFGS and fastest-or-only on $85\%$. The near-linear inner
-is thus the robust paradigm across the corpus; the ablation (\S\ref{sec:ablation}) picks the engine
-within it.
+We compare the three paradigms one could plug into the same outer loop: near-linear (NLF), sparse-direct
+(Ipopt), and matrix-free first-order (L-BFGS on the dual \eqref{eq:dual}; on well-conditioned graphs
+L-BFGS ties NLF, so the speed-up over Ipopt there is a fill-in effect any matrix-free method
+inherits). We ran all three on the same BPR program on $1{,}669$ corpus graphs, each competitor
+capped at $5\times$ NLF's wall-clock (Table~\ref{tab:robustness}).
+\textbf{NLF converged on all $1{,}669$}; first-order failed on $481$ (ill-conditioning,
+$\kappa\sim N$) and interior-point on $143$ (fill-in). On the $90$ graphs hard on both axes,
+neither competitor finished within budget. Where they converge, NLF is median
+$2.6\times$/$4.2\times$ faster than Ipopt/L-BFGS and fastest-or-only on $85\%$. The ablation
+(\S\ref{sec:ablation}) picks the engine within the near-linear class.
 
 \begin{table}[t]\centering\small
 \caption{Three-paradigm robustness frontier across the SuiteSparse corpus ($1{,}669$ graphs, undirected
@@ -1383,8 +1352,7 @@ Applications to Fluid Dynamics, Revised Edition}, SIAM, 2011 (frozen-$\tau$ \S15
 Laplacian equations by approximate elimination}, arXiv:2303.00709, 2023.
 \bibitem{napov-notay} A.~Napov and Y.~Notay, \emph{An efficient multigrid method for graph Laplacian
 systems II: robust aggregation}, SIAM J.\ Sci.\ Comput.\ \textbf{39}(5), S379--S403, 2017.
-\bibitem{bargera2002} H.~Bar-Gera, \emph{Origi
-n-based algorithm for the traffic assignment problem},
+\bibitem{bargera2002} H.~Bar-Gera, \emph{Origin-based algorithm for the traffic assignment problem},
 Transportation Sci.\ \textbf{36}(4), 398--417, 2002.
 \bibitem{bargera2010} H.~Bar-Gera, \emph{Traffic assignment by paired alternative segments (TAPAS)},
 Transportation Res.\ Part B \textbf{44}(8--9), 1022--1046, 2010.
