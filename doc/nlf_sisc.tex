@@ -415,55 +415,62 @@ deflated spectral gap) and $\lambda_{\max}(J)=\Theta(1)$, so the bound is two-si
 $\kappa(J)\sim(F^*-\alpha)^{-1}$.}
 $\chi$ the (a priori unknown) min-cut indicator. We realize this by standard \textbf{pseudo-arclength
 continuation}~\cite{keller,allgower-georg} (Algorithm~\ref{alg:cont}, Case~B), which never forms
-$\chi$. The solution-curve
-tangent satisfies $J\dot\phi=\dot\alpha\,d$, 
+$\chi$.
+
+The equilibria of \eqref{eq:master} trace a smooth curve $\big(\phi(s),\alpha(s)\big)$ as the load is
+varied; we parametrize it by its own \emph{arclength} $s$ and write a dot for the derivative along the
+curve, $\dot{(\cdot)}\equiv d(\cdot)/ds$, so the tangent $(\dot\phi,\dot\alpha)$ is a \emph{unit}
+vector, $\|\dot\phi\|^2+\dot\alpha^2=1$. Differentiating \eqref{eq:master} along $s$ gives it:
 \begin{equation}\label{eq:tangent}
-\dot\phi=J^{+}d,\ \dot\alpha=1,\ \text{then normalize }(\dot\phi,\dot\alpha)\,.
+J\dot\phi=\dot\alpha\,d\quad\Longrightarrow\quad \dot\phi=J^{+}d,\ \ \dot\alpha=1,\ \ \text{then rescale to }\|(\dot\phi,\dot\alpha)\|=1 .
 \end{equation}
-As $\alpha\to F^*$, $J^{+}d\propto\chi/\lambda_{\min}$, so the tangent automatically rotates to align with the cut mode.
-Each predictor along the tangent is corrected by iterating on the bordered system
+As $\alpha\to F^*$, $J^{+}d\propto\chi/\lambda_{\min}$, so the tangent rotates onto the cut mode by
+itself---stepping in $s$ becomes stepping in $\psi$, the well-conditioned direction.
+
+Each continuation step is a \emph{predictor} that advances a fixed arclength $\Delta s$ along the
+tangent, $(\phi,\alpha)\mathrel{+}=\Delta s\,(\dot\phi,\dot\alpha)$, then a \emph{corrector} that
+drives two residuals to zero: the \emph{equilibrium residual} $r=\alpha d-B\rho(B^{\top}\phi)$ of
+\eqref{eq:master} (as in Algorithm~\ref{alg:fixed}) and the \emph{arclength residual}
+\begin{equation}\label{eq:arclength}
+N=\dot\phi^{\top}(\phi-\phi_0)+\dot\alpha\,(\alpha-\alpha_0)-\Delta s ,
+\end{equation}
+how far the point has advanced along the tangent past the previous solution $(\phi_0,\alpha_0)$, minus
+the target $\Delta s$. Setting $r=0$ holds the point on the equilibrium curve; $N=0$ fixes how far
+along it, \emph{replacing} the prescribed-$\alpha$ condition that fails at the fold. (Hence
+``\emph{pseudo}''-arclength: the exact arclength sphere $\|\delta\phi\|^2+\delta\alpha^2=\Delta s^2$
+is linearized to its tangent plane $N=0$.) One Newton step on $(r,N)=0$ is the bordered linear system
 \begin{equation}\label{eq:bordered}
 \begin{bmatrix} J & -d\\ \dot\phi^{\top} & \dot\alpha\end{bmatrix}
-\begin{bmatrix}\delta\phi\\ \delta\alpha\end{bmatrix}=-\begin{bmatrix}r\\ N\end{bmatrix},
+\begin{bmatrix}\delta\phi\\ \delta\alpha\end{bmatrix}=\begin{bmatrix}r\\ -N\end{bmatrix},
 \end{equation}
-$N$ the arclength residual. Block-eliminating $\delta\alpha$, \begin{equation}\label{eq:deflate}
-\delta\alpha=\frac{\dot\phi^{\top}w-N}{\dot\alpha+\dot\phi^{\top}u},\qquad
-\delta\phi=\delta\alpha\,u-w .
+whose block-elimination of $\delta\alpha$---with $u=J^{+}d$ and $w=J^{+}r$, two applications of the
+inner Laplacian solver---is
+\begin{equation}\label{eq:deflate}
+\delta\alpha=-\,\frac{\dot\phi^{\top}w+N}{\dot\alpha+\dot\phi^{\top}u},\qquad
+\delta\phi=\delta\alpha\,u+w .
 \end{equation}
-where $u=J^{+}d$ and $w=J^{+}r$ are two applications of the inner Laplacian solver. Both $u,w\in\mathrm{range}(J^{+})=\chi^{\perp}$: the near-null cut component of the solution (the $\chi$ direction) is pinned by the scalar arclength constraint (second row in \eqref{eq:deflate}). The border keeps the bordered
-system nonsingular through the fold ($\kappa=\mathcal{O}(10^3)$ while $\kappa(J)\to\infty$), allowing the inner Laplacian solver to stay fast (LAMG+ cycle ACF $\approx0.01$; similarly for approximate Cholesky's PCG).
+Both $u,w\in\mathrm{range}(J^{+})=\chi^{\perp}$: the near-null cut component of the solution (the
+$\chi$ direction) is pinned by the scalar arclength row \eqref{eq:arclength}, not by these solves. The
+border keeps the system nonsingular through the fold ($\kappa=\mathcal{O}(10^3)$ while
+$\kappa(J)\to\infty$), so the inner Laplacian solver stays fast (LAMG+ cycle ACF $\approx0.01$;
+likewise approximate Cholesky's PCG).
 
 \begin{algorithm}[t]
 \caption{NLF continuation.}
 \label{alg:cont}
 \begin{algorithmic}[1]
-\Require demand $d$; either a target load $\alpha$ (\textbf{Case~A}) or the request to maximize $\alpha$ (\textbf{Case~B})
+\Require demand $d$; a target load $\alpha$ (\textbf{Case~A}) or the request to maximize $\alpha$ (\textbf{Case~B})
 \State $\phi \gets 0$, $\ H \gets \emptyset$ \Comment{trivial solution at $\alpha=0$}
 \Statex
-\State \textbf{Case A --- congestion, $\alpha$ given} ($\alpha$-continuation, fixed steps):
-\For{$\ell = \tfrac14,\ \tfrac12,\ 1$}
-  \State $\phi \gets$ Algorithm~\ref{alg:fixed} at load $\ell\alpha$, warm-started from $\phi$, sharing $H$
-\EndFor
-\State \Return $\phi$
+\State \textbf{Case~A --- congestion, $\alpha$ given.} For $\ell=\tfrac14,\tfrac12,1$: $\phi \gets$ Algorithm~\ref{alg:fixed} at load $\ell\alpha$, warm-started from $\phi$, sharing $H$. \textbf{Return} $\phi$.
 \Statex
-\State \textbf{Case B --- max-flow, $\alpha$ unknown} (bracket $F^*$, then pseudo-arclength):
-\State $\alpha_{\mathrm{hi}} \gets \sum_{e\sim s}c_e \ge F^*$ (source-cut bound); set $\alpha\gets0.1\,\alpha_{\mathrm{hi}}$, halve until Alg.~\ref{alg:fixed} converges (ensures $\alpha<F^*$); fix $g>1$ ($g{=}1.7$)
-\While{\textbf{true}} \Comment{geometric climb brackets $F^*$}
-  \State $(\phi',\ \textit{converged}) \gets$ Algorithm~\ref{alg:fixed} at load $g\,\alpha$, warm-started from $\phi$
-  \If{\textbf{not} \textit{converged}}
-    \State \textbf{break} \Comment{$g\alpha \ge F^*$: no equilibrium exists, so the fixed-$\alpha$ solve cannot converge}
-  \EndIf
-  \State $\alpha \gets g\,\alpha$, $\ \phi \gets \phi'$ \Comment{keep the largest feasible load}
-\EndWhile
+\State \textbf{Case~B --- max-flow, $\alpha$ unknown (find $F^*$).}
+\State \emph{Seed a feasible load:}\ \ $\alpha_{\mathrm{hi}} \gets \sum_{e\sim s}c_e$ ($\ge F^*$, source-cut bound); set $\alpha\gets 0.1\,\alpha_{\mathrm{hi}}$ and halve until Algorithm~\ref{alg:fixed} converges (so $\alpha<F^*$)
+\State \emph{Bracket $F^*$:}\ \ try load $g\alpha$ ($g{=}1.7$) with Algorithm~\ref{alg:fixed}; accept ($\alpha\gets g\alpha$) while it converges, stop at the first failure ($g\alpha\ge F^*$)
 \State refresh $H$; tangent $(\dot\phi,\dot\alpha)$ by \eqref{eq:tangent}; initialize arc-step $\Delta s$
-\While{$|\dot\alpha| > \mathrm{tol}$} \Comment{$\dot\alpha \to 0$ is the fold}
-  \State predictor: $(\phi,\alpha)\mathrel{+}= \Delta s\,(\dot\phi,\dot\alpha)$
-  \State corrector: iterate \eqref{eq:bordered} to tolerance with line search, $H$ lazily refreshed as in Algorithm~\ref{alg:fixed}
-  \If{corrector converged}
-    \State grow $\Delta s$; refresh and reorient the tangent by \eqref{eq:tangent}
-  \Else
-    \State $\Delta s \gets \Delta s / 2$ \Comment{fresh-$H$ failure: shrink arc-step and re-predict}
-  \EndIf
+\While{$|\dot\alpha| > \mathrm{tol}$} \Comment{$\dot\alpha \to 0$ marks the fold, $\alpha\to F^*$}
+  \State \emph{predictor:} $(\phi,\alpha)\mathrel{+}= \Delta s\,(\dot\phi,\dot\alpha)$;\ \ \emph{corrector:} iterate \eqref{eq:bordered} with line search, $H$ lazily refreshed (Algorithm~\ref{alg:fixed})
+  \State on success grow $\Delta s$ and reorient the tangent \eqref{eq:tangent}; on a fresh-$H$ failure set $\Delta s\gets\Delta s/2$ and re-predict
 \EndWhile
 \State \Return $\phi$, $\ F^* = \alpha$
 \end{algorithmic}
