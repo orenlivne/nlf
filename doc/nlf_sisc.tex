@@ -459,13 +459,13 @@ system nonsingular through the fold ($\kappa=\mathcal{O}(10^3)$ while $\kappa(J)
 \State \Return $\phi$
 \Statex
 \State \textbf{Case B --- max-flow, $\alpha$ unknown} (bracket $F^*$, then pseudo-arclength):
-\State $\alpha \gets$ feasible fraction of the source-cut bound $\alpha_{\mathrm{hi}} \ge F^*$
+\State $\alpha \gets$ feasible fraction of the source-cut bound $\alpha_{\mathrm{hi}} \ge F^*$;\ \ fix growth factor $g>1$ (we use $g=1.7$)
 \While{\textbf{true}} \Comment{geometric climb brackets $F^*$}
-  \State $(\phi',\ \textit{converged}) \gets$ Algorithm~\ref{alg:fixed} at load $1.7\,\alpha$, warm-started from $\phi$
+  \State $(\phi',\ \textit{converged}) \gets$ Algorithm~\ref{alg:fixed} at load $g\,\alpha$, warm-started from $\phi$
   \If{\textbf{not} \textit{converged}}
-    \State \textbf{break} \Comment{$1.7\alpha \ge F^*$: no equilibrium exists, so the fixed-$\alpha$ solve cannot converge}
+    \State \textbf{break} \Comment{$g\alpha \ge F^*$: no equilibrium exists, so the fixed-$\alpha$ solve cannot converge}
   \EndIf
-  \State $\alpha \gets 1.7\,\alpha$, $\ \phi \gets \phi'$ \Comment{keep the largest feasible load}
+  \State $\alpha \gets g\,\alpha$, $\ \phi \gets \phi'$ \Comment{keep the largest feasible load}
 \EndWhile
 \State refresh $H$; tangent $(\dot\phi,\dot\alpha)$ by \eqref{eq:tangent}; initialize arc-step $\Delta s$
 \While{$|\dot\alpha| > \mathrm{tol}$} \Comment{$\dot\alpha \to 0$ is the fold}
