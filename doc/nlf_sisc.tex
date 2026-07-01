@@ -1169,11 +1169,14 @@ honestly-benchmarked treatment to future work.
 The DC approximation to optimal power flow (DC-OPF) minimizes generation cost
 subject to power balance and thermal line limits:
 \begin{equation}\label{eq:dcopf}
-  \min_{\theta,\,p^g}\;\sum_i C_i(p^g_i)
+\begin{aligned}
+  &\min_{\theta,\,p^g}\;\sum_i C_i(p^g_i)
   \quad\text{s.t.}\quad
-  B\,\mathrm{diag}(b)\,B^{\top}\theta = p^g - p^d,\quad
+  B\,\mathrm{diag}(b)\,B^{\top}\theta = p^g - p^d,\\
+  &\qquad\quad
   |b_e(B^{\top}\theta)_e|\le c_e,\quad
   p^{\min}\le p^g\le p^{\max},
+\end{aligned}
 \end{equation}
 where $b_e$ is the line susceptance, $p^d$ fixed demand, and $C_i$ a convex
 (typically quadratic or piecewise-linear) generation cost.
