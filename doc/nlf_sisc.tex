@@ -398,12 +398,10 @@ textbook behavior (a \texttt{roadNet-PA} $100$-cycle stall reduces to $5$ cycles
 Both problem classes use continuation from $\alpha=0$; they differ only in parametrization
 (Algorithm~\ref{alg:cont}).
 
-For the no-fold congestion class, $\alpha$ is a given target and the continuation steps $\alpha$
-directly: three fixed steps $\ell=\tfrac14,\tfrac12,1$ of the target load suffice to globalize
-convergence. Each step warm-starts from the previous solution and shares the same hierarchy state
+For the no-fold congestion class, $\alpha$ is a given target and the continuation steps $\alpha$. Each step warm-starts from the previous solution and shares the same hierarchy state
 $H$ across the entire ramp.
 
-For the saturating (fold) class, $\alpha$ is the unknown maximizer. A fixed-$\alpha$ solve is
+For the saturating/fold class, $\alpha$ is the unknown maximizer. A fixed-$\alpha$ solve is
 feasible iff $\alpha<F^*$ (the min-cut value), and as $\alpha\uparrow F^*$ the solution curve
 \emph{folds}---$\alpha(V)$ flattens onto the asymptote $F^*$ while the potentials grow without
 bound (Fig.~\ref{fig:cusp}); at the fold $\kappa(J)\sim(F^*-\alpha)^{-1}$ and the source--sink gap
@@ -450,18 +448,14 @@ complement} $\chi^{\perp}$, at the measured uniform $\mu\approx0.01$. The border
 system nonsingular through the fold ($\kappa=\mathcal{O}(10^3)$ while $\kappa(J)\to\infty$).
 
 \begin{algorithm}[t]
-\caption{NLF continuation (both classes start at $\alpha=0$, $\phi=0$, $H$ empty).
-  \textbf{Left:} no-fold / congestion ($\alpha$ given): $\alpha$-continuation with fixed steps.
-  \textbf{Right:} fold / max-flow ($\alpha$ unknown): pseudo-arclength continuation to $F^*$.}
+\caption{NLF continuation.}
 \label{alg:cont}
 \begin{algorithmic}[1]
-\State \textbf{No fold ($\alpha$ given):} $\phi\gets0$, $H\gets\emptyset$.
+\State Set $\alpha\gets 0$, $\phi \gets 0$, $H \gets \emptyset$.
+\State \textbf{No fold ($\alpha$ given):}
   For $\ell=\tfrac14,\tfrac12,1$: run Algorithm~\ref{alg:fixed} at load $\ell\alpha$,
   warm-started from previous $\phi$, $H$ shared. \textbf{return} $\phi$
-\Statex
-\State \textbf{Fold ($\alpha$ unknown, find $F^*$):} $\phi\gets0$, $H\gets\emptyset$.
-  Climb $\alpha$ geometrically (each load by Algorithm~\ref{alg:fixed}) until
-infeasible---this brackets $F^*$
+\State \textbf{Fold ($\alpha$ unknown, find $F^*$):} Climb $\alpha$ geometrically (each load by Algorithm~\ref{alg:fixed}) until infeasible.
 \State refresh $H$; tangent $(\dot\phi,\dot\alpha)$ by \eqref{eq:tangent}
 \State predictor: $(\phi,\alpha)\mathrel{+}= \Delta s\,(\dot\phi,\dot\alpha)$; corrector: iterate
 \eqref{eq:bordered} with line search, $H$ frozen (refresh on factor $>0.25$ or stall; a corrector
