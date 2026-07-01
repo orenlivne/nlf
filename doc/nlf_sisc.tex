@@ -25,7 +25,7 @@ linearization---a weighted graph Laplacian---is inverted by a lazily refreshed n
 Laplacian solver (engine-agnostic; default: approximate Cholesky, LAMG+ interchangeable).
 The whole nonlinear solve costs $2$--$4$ linear Laplacian solves. On single-commodity congestion
 over real road-network topologies (BPR cost), NLF converges for all $2{,}003$ SuiteSparse graphs
-(up to $5.6\times10^7$ edges); against a state-of-the-art interior-point method (IPM), NLF was
+up to $5.6\times10^7$ edges; against a state-of-the-art interior-point method (IPM), NLF was
 $2.6\times$ faster on average and $>45\times$ on the poorly-separable graphs where the IPM's
 direct KKT core is superlinear; against matrix-free L-BFGS it was $4.2\times$ faster on average
 and the only solver to finish on the $90$ hardest instances. A multicommodity extension routes $K$
@@ -426,16 +426,12 @@ Each predictor along the tangent is corrected by iterating on the bordered syste
 \begin{bmatrix} J & -d\\ \dot\phi^{\top} & \dot\alpha\end{bmatrix}
 \begin{bmatrix}\delta\phi\\ \delta\alpha\end{bmatrix}=-\begin{bmatrix}r\\ N\end{bmatrix},
 \end{equation}
-$N$ the arclength residual. Block-eliminating $\delta\alpha$ shows what the engine actually inverts:
-with $u=J^{+}d$ and $w=J^{+}r$ (two applications of the inner solver),
-\begin{equation}\label{eq:deflate}
+$N$ the arclength residual. Block-eliminating $\delta\alpha$, \begin{equation}\label{eq:deflate}
 \delta\alpha=\frac{\dot\phi^{\top}w-N}{\dot\alpha+\dot\phi^{\top}u},\qquad
 \delta\phi=\delta\alpha\,u-w .
 \end{equation}
-Both $u,w\in\mathrm{range}(J^{+})=\chi^{\perp}$: the near-null cut direction $\chi$ is pinned by the
-scalar arclength row, not by these solves, so the cycles resolve $J$ only on the \emph{deflated
-complement} $\chi^{\perp}$, at the measured uniform $\mu\approx0.01$. The border keeps the bordered
-system nonsingular through the fold ($\kappa=\mathcal{O}(10^3)$ while $\kappa(J)\to\infty$).
+where $u=J^{+}d$ and $w=J^{+}r$ are two applications of the inner Laplacian solver. Both $u,w\in\mathrm{range}(J^{+})=\chi^{\perp}$: the near-null cut component of the solution (the $\chi$ direction) is pinned by the scalar arclength constraint (second row in \eqref{eq:deflate}). The border keeps the bordered
+system nonsingular through the fold ($\kappa=\mathcal{O}(10^3)$ while $\kappa(J)\to\infty$), allowing the inner Laplacian solver to stay fast (LAMG+ cycle ACF $\approx0.01$; similarly for approximate Cholesky's PCG).
 
 \begin{algorithm}[t]
 \caption{NLF continuation.}
