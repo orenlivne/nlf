@@ -357,15 +357,22 @@ residual tolerance $\mathrm{tol}$ (default $10^{-9}$); forcing parameter $\eta$ 
 \State $r \gets \alpha d - B\rho(B^{\top}\phi)$
 \While{$\|r\| > \mathrm{tol}\cdot\alpha\,\|d\|$}
 \State \textbf{refresh check:} if $H$ is empty, or the previous pass reduced $\|r\|$ by a factor
-worse than $0.25$, or step 5 stalled on a stale $H$, rebuild $H\gets$ inner setup of
+worse than $0.25$, or the line search stalled on a stale $H$, rebuild $H\gets$ inner setup of
 $J(\phi)=B\,\mathrm{diag}(\rho'(B^{\top}\phi))B^{\top}$
 \State $\delta \gets$ approximate solution of the frozen correction equation $J_H\,\delta = r$,
 where $J_H=B\,\mathrm{diag}(\rho'(B^{\top}\phi_{\mathrm{build}}))B^{\top}$ is the linearization
 $H$ was built from: inner solve(s) with $H$ starting from $\delta=0$, stopped when
 $\|r - J_H\,\delta\| \le \eta\,\|r\|$
-\State \textbf{line search:} for $\tau=1,\tfrac12,\tfrac14,\dots$ accept the first $\tau$ with
-$\big\|\alpha d - B\rho\big(B^{\top}(\phi+\tau\delta)\big)\big\| \le \|r\|$ and set
-$\phi\gets\phi+\tau\delta$; on failure with a stale $H$, refresh and retry once
+\State \textbf{line search:} for $\tau=1,\tfrac12,\tfrac14,\dots$ find the first $\tau$ with
+$\big\|\alpha d - B\rho\big(B^{\top}(\phi+\tau\delta)\big)\big\| \le \|r\|$
+\If{line search succeeded} $\phi\gets\phi+\tau\delta$
+\ElsIf{$H$ was stale (built before this iteration)} rebuild $H$ from current $J(\phi)$;
+recompute $\delta\gets$ inner solve of $J_H\,\delta=r$ from $\delta=0$; repeat line search
+  \If{retry succeeded} $\phi\gets\phi+\tau\delta$
+  \Else\ \textbf{break} \Comment{fresh-$H$ stall: no improving direction exists; exit}
+  \EndIf
+\Else\ \textbf{break} \Comment{fresh $H$ already in use; exit}
+\EndIf
 \State $r \gets \alpha d - B\rho(B^{\top}\phi)$
 \EndWhile
 \State \Return $\phi$
