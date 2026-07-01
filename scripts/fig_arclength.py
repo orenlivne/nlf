@@ -37,14 +37,13 @@ ax.text(2.18,0.905,r"$\rho(\phi)=\alpha d$",
 
 # --- arclength constraint line N=0 through P*, perpendicular to the tangent ---
 perp=np.array([-ad,fd]); L0=Pstar-0.34*perp; L1=Pstar+0.155*perp
-ax.plot([L0[0],L1[0]],[L0[1],L1[1]],ls=(0,(4,3)),color=GREY,lw=1.4,zorder=2)
-ax.text(L1[0]-0.01,L1[1]+0.006,r"$N=0$ (arclength)",color=GREY,fontsize=10,ha="right",va="bottom")
+ax.plot([L0[0],L1[0]],[L0[1],L1[1]],ls=(0,(4,3)),color=GREY,lw=1.4,zorder=2)  # N=0 arclength line (label removed)
 
-# --- predictor: Ds along the unit tangent ---
+# --- predictor: Ds along the unit tangent (the teal line from (phi0,alpha0) to P*) ---
 ax.annotate("",xy=Pstar,xytext=(f0,a0),
             arrowprops=dict(arrowstyle="-|>",color=AQUA,lw=2.8,shrinkA=0,shrinkB=0),zorder=5)
-ax.text(1.03,0.60,r"$\Delta s\,(\dot\phi,\dot\alpha)$",color="#128a99",fontsize=11,
-        ha="left",va="top",rotation=27)
+ax.text(0.905,0.705,r"$\Delta s\,(\dot\phi,\dot\alpha)$",color="#128a99",fontsize=11,
+        ha="center",va="center",rotation=49)
 
 # --- residual r: vertical gap from P* down to the curve ---
 ax.plot([fst,fst],[rho(fst),ast],ls=":",color=INK,lw=1.7,zorder=4)
@@ -64,14 +63,14 @@ ax.text(Pstar[0]-0.055,(Pstar[1]+P1[1])/2+0.028,r"$(\delta\phi,\delta\alpha)$",
 
 # --- points ---
 ax.plot(f0,a0,"o",color=INK,ms=6.5,zorder=8)
-ax.text(f0+0.05,a0-0.028,r"$(\phi_0,\alpha_0)$"+"\nprev. solution",color=INK,fontsize=10.3,ha="left",va="top")
+ax.text(f0+0.10,a0+0.002,r"$(\phi_0,\alpha_0)$"+"\nprev. solution",color=INK,fontsize=10.3,ha="left",va="center")
 ax.plot(*Pstar,"o",color=INK,ms=6.5,zorder=8)
 ax.text(Pstar[0]+0.03,Pstar[1]+0.052,r"$P^*$",color=INK,fontsize=11,ha="left",va="bottom")
 ax.plot(*P1,"o",color=INK,ms=6.5,zorder=8)
 ax.text(P1[0]-0.04,P1[1]-0.028,"corrected",color=INK,fontsize=10.3,ha="right",va="top")
 
 # --- relation box, in the empty lower-right (below the curve) ---
-ax.text(0.62,0.30,
+ax.text(0.63,0.405,
         "bordered corrector\n"
         r"$J\,\delta\phi-d\,\delta\alpha=r$"+"\n"
         r"$\dot\phi\,\delta\phi+\dot\alpha\,\delta\alpha=-N$"+"\n"

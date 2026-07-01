@@ -829,6 +829,16 @@ on the same graph. Across the classes the ratio is
 edges) $4.4$---flat in size and class: the entire nonlinear equilibrium costs $2$--$4$ linear
 Laplacian solves.
 
+\subsection{How accurately to solve each continuation step}\label{sec:contin-ablation}
+Continuation is a nested initial-guess generator~\cite[\S8.3.2]{brandt-guide}: intermediate stages need
+only stay on the solution path. On the no-fold congestion class a single warm-from-zero solve---no
+continuation at all---reaches $10^{-9}$ in $5$--$9$ inner cycles across a $20\times$ demand range, so the
+load ramp is pure overhead. At the fold, continuation is mandatory ($J$ singular at $F^*$), yet resolving
+each arclength corrector to $10^{-9}$ over-solves the \emph{value}: matching the per-step corrector
+tolerance to the $10^{-4}$ at which $F^*$ is verifiable against push--relabel (\S\ref{sec:maxflow})
+reaches the same min cut in $2$--$7\times$ fewer corrector solves and hierarchy rebuilds, while a single
+corrector step per arclength step overshoots $F^*$. Work should track the accuracy that matters.
+
 \section{Maximum flow}\label{sec:maxflow}
 The saturating instance \eqref{eq:rho} recovers the exact combinatorial maximum flow. Read
 $f=\rho(B^{\top}\phi)$ as an edge-flow vector: $\rho$'s range is the capacity box $|f_e|\le c_e$, and
