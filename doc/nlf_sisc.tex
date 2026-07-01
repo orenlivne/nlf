@@ -167,7 +167,7 @@ coarse-grid objective. However, Sec.~\ref{sec:dcopt} outlines how NLF might be e
 
 \emph{Combinatorial and transport-specific solvers.} Augmenting-path and push--relabel max-flow
 \cite{goldberg-tarjan,boykov-kolmogorov} and the almost-linear-time exact algorithm
-\cite{chen-almost-linear} -- a theoretical breakthrough with galactic constants, not a practical implementation -- target  target directed max/min-cost flow; Frank--Wolfe~\cite{frankwolfe} and
+\cite{chen-almost-linear}---a theoretical breakthrough with galactic constants, not a practical implementation---target directed max/min-cost flow; Frank--Wolfe~\cite{frankwolfe} and
 bush-based assignment (Algorithm~B~\cite{bargera2002}, TAPAS~\cite{bargera2010}) target the
 smooth-cost traffic program. Each is specialized to one problem class. NLF's contribution is
 orthogonal: a \emph{single} solver, parametrized by one edge law, that spans all of them and inherits
@@ -409,7 +409,10 @@ e^{-2V/c_e}\,(1+o(1))$. Hence $F^*-\alpha\asymp e^{-2V/\bar c}$, $\bar c$ the la
 i.e.\ $V=\tfrac{\bar c}{2}\log\tfrac{1}{F^*-\alpha}+O(1)$ and $\psi=\chi^{\top}\phi\propto V$. The
 same expansion gives the cut conductances
 $\rho'_e(g_e)=\mathrm{sech}^2(g_e/c_e)=4e^{-2V/c_e}(1+o(1))$, whence
-$\lambda_{\min}(J)\le\sum_{\mathrm{cut}}\rho'_e\propto F^*-\alpha$ (Rayleigh quotient at $\chi$,
+$\lambda_{\min}(J)\le\sum_{\mathrm{cut}}\rho'_e\propto F^*-\alpha$ (here and below $\lambda_{\min}$
+is the smallest \emph{nonzero} eigenvalue---$J$ being a graph Laplacian, its zero eigenvalue with
+constant eigenvector $\mathbf 1$ is excluded, and $\kappa(J)$ is correspondingly the ratio over the
+nonzero spectrum; the bound is the Rayleigh quotient at $\chi$,
 which loads only the cut edges); for a \emph{simple} fold the next eigenvalue stays $\Theta(1)$ (the
 deflated spectral gap) and $\lambda_{\max}(J)=\Theta(1)$, so the bound is two-sided and
 $\kappa(J)\sim(F^*-\alpha)^{-1}$.}
@@ -424,7 +427,9 @@ vector, $\|\dot\phi\|^2+\dot\alpha^2=1$. Differentiating \eqref{eq:master} along
 \begin{equation}\label{eq:tangent}
 J\dot\phi=\dot\alpha\,d\quad\Longrightarrow\quad \dot\phi=J^{+}d,\ \ \dot\alpha=1,\ \ \text{then rescale to }\|(\dot\phi,\dot\alpha)\|=1 .
 \end{equation}
-As $\alpha\to F^*$, $J^{+}d\propto\chi/\lambda_{\min}$, so the tangent rotates onto the cut mode by
+As $\alpha\to F^*$, $J^{+}d\propto\chi/\lambda_{\min}$ (the pseudoinverse $J^{+}$ acts on
+$\mathbf 1^{\perp}$, so $\lambda_{\min}$ is again the smallest nonzero eigenvalue), so the tangent
+rotates onto the cut mode by
 itself---stepping in $s$ becomes stepping in $\psi$, the well-conditioned direction.
 
 Each continuation step is a \emph{predictor} that advances a fixed arclength $\Delta s$ along the
