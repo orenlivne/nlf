@@ -63,7 +63,7 @@ where $B$ is the node--edge incidence matrix, $\phi$ the node potentials, $d$ a 
 $\alpha$ a load, and $\rho_e$ a monotone edge law that alone encodes the physics: a
 saturating $\rho_e$ gives a hard capacity (max flow); a gently rising $\rho_e$ gives a congestion
 cost (traffic)\footnote{Notation: $\rho$ acts componentwise and $\rho_e$ denotes the law on an individual edge $e$.}. The flow is $f_e=\rho_e\big((B^{\top}\phi)_e\big)$, and every Newton linearization of
-\eqref{eq:master} is an ordinary weighted graph Laplacian $J=B\,\mathrm{diag}(\rho')B^{\top}$. For congestion and routing problems $\alpha$ is a given input; for maximum flow, $\alpha$ is an unknown to be maximized. To obtain a fast \emph{nonlinear} solver, we use an inexact chord-Newton iteration with the linearization frozen across most steps, lazily refreshed. Furthermore, we weave a continuation in $\alpha$ into the same Newton loop. The nonlinear solve costs $2$--$4$ linear Laplacian solves (\S\ref{sec:accuracy}). Any near-linear
+\eqref{eq:master} is an ordinary weighted graph Laplacian $J=B\,\mathrm{diag}(\rho')B^{\top}$. For congestion and routing problems $\alpha$ is a given input; for maximum flow, $\alpha$ is an unknown to be maximized. To obtain a fast \emph{nonlinear} solver, we use an inexact chord-Newton iteration with the linearization frozen across most steps, lazily refreshed. For maximum flow we weave a continuation in $\alpha$ into the same Newton loop to track the solution through the fold. The nonlinear solve costs $2$--$4$ linear Laplacian solves (\S\ref{sec:accuracy}). Any near-linear
 Laplacian solver can serve as the inner engine; we default to approximate Cholesky~\cite{approxchol},
 the faster engine across the corpus at equal robustness (\S\ref{sec:ablation}), with
 LAMG+~\cite{lamgplus} interchangeable in robustness (its constant differs by graph class). One incidental convenience of LAMG+'s
@@ -245,7 +245,7 @@ imposes no hard cap, so $\rho_e$ is unbounded and the law never \emph{saturates}
 finite flow (for BPR $\rho'_e$ is large near free flow and decays as $f$ grows, but never reaches $0$).
 Hence $J$ is nonsingular at every equilibrium---no feasibility limit and no fold.
 Traffic assignment with BPR cost is of this type; on its bounded-flow equilibria $J$ is
-well-conditioned and continuation is performed in $\alpha$ from $0$ to the target value (\S\ref{sec:traffic}).
+well-conditioned, so \eqref{eq:master} is solved directly at the target load, with no continuation (\S\ref{sec:traffic}).
 \item \emph{Hard capacity (saturating $\rho$, conductance $\to0$).} $\alpha$ is an unknown to be maximized. The flow cannot exceed a capacity
 $c_e$, so $\rho_e$ is bounded and $\rho'_e\to0$ as the edge saturates. As $\alpha$ rises to a
 feasibility limit, the saturating edges form a cut and $J$ \emph{folds}---a continuation
@@ -316,7 +316,7 @@ barrier schedule. The Beckmann congestion instance \eqref{eq:primal} is already 
 nonlinear Laplacian solved via existing linear Laplacian algorithms.
 
 \section{The NLF algorithm}\label{sec:algorithm}
-NLF always uses continuation, starting at $\alpha=0$ (trivial solution $\phi=0$) and stepping toward the target. For congestion (no fold), $\alpha$ is a given input and the continuation steps $\alpha$ directly to the target value in a short fixed ramp. For max-flow (fold), $\alpha$ is the unknown maximizer and the continuation switches to pseudo-arclength parametrization to track the solution curve through the fold to $F^*$. In both cases each fixed-$(\phi,\alpha)$ subproblem is solved by a handful of inexact chord-Newton steps. The inner solver's setup---its factor or hierarchy---is built once, frozen across continuation steps and re-formed only when an observed-convergence monitor signals it has drifted too far. The numbers of steps and inner solves are both bounded, implying empirical-$\Om$ complexity. We describe the linear engine
+The two problem classes need different outer loops. For congestion (no fold), $\alpha$ is a given input, so \eqref{eq:master} is solved \emph{directly} at that load by a handful of inexact chord-Newton steps (Algorithm~\ref{alg:fixed}), warm-started from $\phi=0$; no load ramp is needed---a single fixed-load solve converges across the corpus (\S\ref{sec:corpus}). For max-flow (fold), $\alpha$ is the unknown maximizer, and continuation from $\alpha=0$ in pseudo-arclength parametrization tracks the solution curve through the fold to $F^*$, each fixed-$(\phi,\alpha)$ subproblem again a handful of chord-Newton steps. The inner solver's setup---its factor or hierarchy---is built once, frozen across steps and re-formed only when an observed-convergence monitor signals it has drifted too far. The numbers of steps and inner solves are both bounded, implying empirical-$\Om$ complexity. We describe the linear engine
 (\S\ref{sec:inner}), the fixed-load solve (\S\ref{sec:fas}), and the continuation (\S\ref{sec:continuation}).
 
 \subsection{The inner Laplacian solve}\label{sec:inner}
@@ -387,11 +387,10 @@ cost. Near the solution the full step is always accepted (one trial, $\tau=1$).
 \paragraph{Deep hierarchies (LAMG+ engine only)} On graphs with ${\ge}20$-level hierarchies (country-scale roads, large FEM meshes) the dipole right-hand side excites the longest mode that the stock cycle under-treats. A \emph{grown} cycle index ($1.15\times$ per level, cap $\gamma_l\tau_l\le0.95$, each cycle stays $\Om$) is used, restarted if the factor exceeds $0.6$. This engages on $11$ of $2{,}003$ graphs ($0.5\%$) and restores textbook convergence.
 
 \subsection{Continuation}\label{sec:continuation}
-Both problem classes use continuation from $\alpha=0$; they differ only in parametrization
-(Algorithm~\ref{alg:cont}).
-
-For the no-fold congestion class, $\alpha$ is a given target and the continuation steps $\alpha$. Each step warm-starts from the previous solution and shares the same hierarchy state
-$H$ across the entire ramp.
+Only the saturating/fold class needs continuation. For the no-fold congestion class the target
+$\alpha$ is given, so Algorithm~\ref{alg:fixed} solves \eqref{eq:master} directly at that load,
+warm-started from $\phi=0$---no ramp (\S\ref{sec:corpus}); the rest of
+this section concerns the fold.
 
 For the saturating/fold class, $\alpha$ is the unknown maximizer. A fixed-$\alpha$ solve is
 feasible iff $\alpha<F^*$ (the min-cut value), and as $\alpha\uparrow F^*$ the solution curve
@@ -417,7 +416,7 @@ which loads only the cut edges); for a \emph{simple} fold the next eigenvalue st
 deflated spectral gap) and $\lambda_{\max}(J)=\Theta(1)$, so the bound is two-sided and
 $\kappa(J)\sim(F^*-\alpha)^{-1}$.}
 $\chi$ the (a priori unknown) min-cut indicator. We realize this by standard \textbf{pseudo-arclength
-continuation}~\cite{keller,allgower-georg} (Algorithm~\ref{alg:cont}, Case~B), which never forms
+continuation}~\cite{keller,allgower-georg} (Algorithm~\ref{alg:cont}), which never forms
 $\chi$.
 
 The equilibria of \eqref{eq:master} trace a smooth curve $\big(\phi(s),\alpha(s)\big)$ as the load is
@@ -461,15 +460,11 @@ $\kappa(J)\to\infty$), so the inner Laplacian solver stays fast (LAMG+ cycle ACF
 likewise approximate Cholesky's PCG).
 
 \begin{algorithm}[t]
-\caption{NLF continuation.}
+\caption{NLF arclength continuation (max-flow fold).}
 \label{alg:cont}
 \begin{algorithmic}[1]
-\Require demand $d$; a target load $\alpha$ (\textbf{Case~A}) or the request to maximize $\alpha$ (\textbf{Case~B})
+\Require demand $d$; maximize $\alpha$ to find $F^*$ \Comment{congestion needs no continuation: Algorithm~\ref{alg:fixed} at the target load}
 \State $\phi \gets 0$, $\ H \gets \emptyset$ \Comment{trivial solution at $\alpha=0$}
-\Statex
-\State \textbf{Case~A --- congestion, $\alpha$ given.} For $\ell=\tfrac14,\tfrac12,1$: $\phi \gets$ Algorithm~\ref{alg:fixed} at load $\ell\alpha$, warm-started from $\phi$, sharing $H$. \textbf{Return} $\phi$.
-\Statex
-\State \textbf{Case~B --- max-flow, $\alpha$ unknown (find $F^*$).}
 \State \emph{Seed a feasible load:}\ \ $\alpha_{\mathrm{hi}} \gets \sum_{e\sim s}c_e$ ($\ge F^*$, source-cut bound); set $\alpha\gets 0.1\,\alpha_{\mathrm{hi}}$ and halve until Algorithm~\ref{alg:fixed} converges (so $\alpha<F^*$)
 \State \emph{Bracket $F^*$:}\ \ try load $g\alpha$ ($g{=}1.7$) with Algorithm~\ref{alg:fixed}; accept ($\alpha\gets g\alpha$) while it converges, stop at the first failure ($g\alpha\ge F^*$)
 \State refresh $H$; tangent $(\dot\phi,\dot\alpha)$ by \eqref{eq:tangent}; initialize arc-step $\Delta s$
@@ -481,7 +476,7 @@ likewise approximate Cholesky's PCG).
 \end{algorithmic}
 \end{algorithm}
 
-The refresh policy of \S\ref{sec:fas} is woven into the corrector as a staleness safeguard (Algorithm~\ref{alg:cont}, Case~B). Both $u$ and $w$ computations reuse one frozen hierarchy; since the cut conductances drain exponentially in the cut amplitude, that hierarchy ages faster as the fold sharpens, and the monitor rebuilds it more often — about every 4 arclength steps at $0.97 F^*$, every 2 at $0.995 F^*$. The predictor's tangent $\phi = J^{+}d$, the single direction most sensitive to J's drift, is instead recomputed on a fresh hierarchy once per accepted step. The fixed-load solution remains machine-precise as close to the fold as $\alpha = 0.995 F^*$ (a fixed-$\alpha$ equilibrium is well-posed only for $\alpha < F^*$), while the arclength continuation tracks through the fold to the exact F* without stalling (Table~\ref{tab:mf}).
+The refresh policy of \S\ref{sec:fas} is woven into the corrector as a staleness safeguard (Algorithm~\ref{alg:cont}). Both $u$ and $w$ computations reuse one frozen hierarchy; since the cut conductances drain exponentially in the cut amplitude, that hierarchy ages faster as the fold sharpens, and the monitor rebuilds it more often — about every 4 arclength steps at $0.97 F^*$, every 2 at $0.995 F^*$. The predictor's tangent $\phi = J^{+}d$, the single direction most sensitive to J's drift, is instead recomputed on a fresh hierarchy once per accepted step. The fixed-load solution remains machine-precise as close to the fold as $\alpha = 0.995 F^*$ (a fixed-$\alpha$ equilibrium is well-posed only for $\alpha < F^*$), while the arclength continuation tracks through the fold to the exact F* without stalling (Table~\ref{tab:mf}).
 
 \begin{figure}[t]\centering
 \begin{minipage}[b]{0.512\textwidth}\centering\includegraphics[width=\linewidth]{cusp.pdf}\\{\footnotesize(a)}\end{minipage}\hfill
@@ -543,11 +538,12 @@ No combinatorial algorithm addresses the convex congestion program \eqref{eq:pri
 Frank--Wolfe~\cite{frankwolfe} converges only sublinearly: the iteration count to a $10^{-4}$
 duality gap grows with size (Table~\ref{tab:fw}, $115$ at $n{=}144$) and the $\mathcal{O}(1/k)$
 rate cannot reach the high accuracy NLF attains. The field's high-accuracy standard, the
-\emph{bush-based} family (Algorithm~B~\cite{bargera2002}, TAPAS~\cite{bargera2010}), was
-unavailable for a same-instance head-to-head (AequilibraE failed to build; a minimal
-Algorithm~B reference did not reach high accuracy), so we position it qualitatively and
+\emph{bush-based} family (Algorithm~B~\cite{bargera2002}, TAPAS~\cite{bargera2010}), solves the
+\emph{directed} user equilibrium (nonnegative arc flows, one-sided cost)---a different convex program
+from the undirected, signed-flow Beckmann relaxation NLF solves here (App.~\ref{app:instances}), so a
+same-instance head-to-head is ill-posed. We therefore position bush methods qualitatively and
 benchmark quantitatively against \textbf{Ipopt}~\cite{ipopt}, a mature interior-point solver
-on the identical program. This is conservative: Ipopt attains the same $10^{-10}$, whereas
+on the \emph{identical} program. This is conservative: Ipopt attains the same $10^{-10}$, whereas
 Frank--Wolfe and bush-based methods do not address the max-flow instance (\S\ref{sec:maxflow}).
 Ipopt's per-step cost is a sparse-direct KKT factorization: cheap on planar graphs but
 fill-in grows superlinearly as separators worsen---exactly the axis on which NLF is immune.
@@ -619,10 +615,14 @@ $3.0$\,s---the textbook direct-vs-iterative crossover, now for a \emph{nonlinear
 careful about what it shows: these graphs are \emph{well-conditioned}, so the win over the IPM is its
 KKT \emph{fill-in}, which \emph{any} matrix-free solver inherits; the near-linear inner's distinctive
 value is on the \emph{ill-conditioned} graphs of the frontier (\S\ref{sec:frontier}).
+These NLF times still carry the three-stage load ramp; solving congestion directly at the target load
+(Algorithm~\ref{alg:fixed}) is ${\approx}2\times$ faster corpus-wide (\S\ref{sec:corpus})---$2.7\times$
+fewer Newton cycles, halved in wall-clock by shared setup---narrowing Ipopt's planar-road lead toward
+parity and shifting the crossover to smaller, better-separated graphs.
 
 \begin{table}[t]\centering\small
-\caption{Scaling on poorly-separable (Erd\H{o}s--R\'enyi) graphs with BPR cost: NLF (Algorithm~\ref{alg:cont},
-$\Om$ near-linear inner) vs.\ Ipopt 3.14.19 (interior-point, MUMPS~5.9.0 sparse-direct KKT). Both reach the
+\caption{Scaling on poorly-separable (Erd\H{o}s--R\'enyi) graphs with BPR cost: NLF
+($\Om$ near-linear inner) vs.\ Ipopt 3.14.19 (interior-point, MUMPS~5.9.0 sparse-direct KKT). Both reach the
 same optimum of the undirected congestion program. NLF's step count shows no size trend; Ipopt is
 superlinear and exceeds the $120$\,s CPU budget on the largest instance (``---'').
 Speed-up $=t_{\mathrm{Ipopt}}/t_{\mathrm{NLF}}$.}\label{tab:bprscale}
@@ -661,7 +661,10 @@ settings (the near-linear inner solver is interchangeable, \S\ref{sec:ablation})
 Under this protocol---one BPR instance per graph, random capacities, a single far source--sink
 demand, stock settings---NLF converged on \textbf{all $2{,}003$ graphs}, to residuals at or below the
 $10^{-9}$ tolerance, with a cycle count of \emph{median $18$} and no size trend (each step one inexact
-V-cycle at forcing $0.05$; range $6$--$33$; Fig.~\ref{fig:corpus}B). We prove no convergence
+V-cycle at forcing $0.05$; range $6$--$33$; Fig.~\ref{fig:corpus}B). This sweep ramps the load in three
+stages; re-run as a single direct solve at the target (no continuation, Algorithm~\ref{alg:fixed}) it
+still converges on \emph{all $2{,}003$}, in a median $6$ cycles ($2.7\times$ fewer), the congestion
+default. We prove no convergence
 guarantee and do not rule out adversarial capacity distributions; the claim is empirical, on this
 benchmark. The total wall-clock fits \textbf{$t\propto m^{0.98}$} (a fitted exponent over five
 decades, consistent with the inner solver's $\mathcal{O}(m\log(1/\varepsilon))$ cost---empirically
@@ -688,13 +691,15 @@ per-edge cost flat at ${\approx}2.4~\mu$s/edge median. (B)~cycle count: a flat d
 \subsection{Why a near-linear inner: the paradigm frontier}\label{sec:frontier}
 We compare the three paradigms one could plug into the same outer loop: near-linear (NLF), sparse-direct
 (Ipopt), and matrix-free first-order (L-BFGS on the dual \eqref{eq:dual}; on well-conditioned graphs
-L-BFGS ties NLF, so the speed-up over Ipopt there is a fill-in effect any matrix-free method
-inherits). We ran all three on the same BPR program on $1{,}669$ corpus graphs, each competitor
+L-BFGS also scales near-linearly and beats Ipopt, so that win is a fill-in effect any matrix-free
+method inherits). We ran all three on the same BPR program on $1{,}669$ corpus graphs, each competitor
 capped at $5\times$ NLF's wall-clock (Table~\ref{tab:robustness}).
 \textbf{NLF converged on all $1{,}669$}; first-order failed on $481$ (ill-conditioning,
 $\kappa\sim N$) and interior-point on $143$ (fill-in). On the $90$ graphs hard on both axes,
 neither competitor finished within budget. Where they converge, NLF is median
-$2.6\times$/$4.2\times$ faster than Ipopt/L-BFGS and fastest-or-only on $85\%$. The ablation
+$2.6\times$/$4.2\times$ faster than Ipopt/L-BFGS and fastest-or-only on $85\%$; here L-BFGS already
+solved directly at the target load while these NLF times carry the ramp, so dropping it
+(\S\ref{sec:bprscale}) only widens NLF's margin over first-order. The ablation
 (\S\ref{sec:ablation}) picks the engine within the near-linear class.
 
 \begin{table}[t]\centering\small
@@ -829,15 +834,13 @@ on the same graph. Across the classes the ratio is
 edges) $4.4$---flat in size and class: the entire nonlinear equilibrium costs $2$--$4$ linear
 Laplacian solves.
 
-\subsection{How accurately to solve each continuation step}\label{sec:contin-ablation}
-Continuation is a nested initial-guess generator~\cite[\S8.3.2]{brandt-guide}: intermediate stages need
-only stay on the solution path. On the no-fold congestion class a single warm-from-zero solve---no
-continuation at all---reaches $10^{-9}$ in $5$--$9$ inner cycles across a $20\times$ demand range, so the
-load ramp is pure overhead. At the fold, continuation is mandatory ($J$ singular at $F^*$), yet resolving
-each arclength corrector to $10^{-9}$ over-solves the \emph{value}: matching the per-step corrector
-tolerance to the $10^{-4}$ at which $F^*$ is verifiable against push--relabel (\S\ref{sec:maxflow})
-reaches the same min cut in $2$--$7\times$ fewer corrector solves and hierarchy rebuilds, while a single
-corrector step per arclength step overshoots $F^*$. Work should track the accuracy that matters.
+\subsection{How accurately to solve each corrector step at the fold}\label{sec:contin-ablation}
+At the fold, continuation is mandatory ($J$ singular at $F^*$), but each arclength step is only a nested
+initial guess~\cite[\S8.3.2]{brandt-guide}---it need only stay on the solution path, so resolving every
+corrector to $10^{-9}$ over-solves the \emph{value}. The max-flow $F^*$ is verifiable against
+push--relabel (\S\ref{sec:maxflow}) only to ${\approx}10^{-4}$; matching the per-step corrector
+tolerance to that reaches the same min cut in $2$--$7\times$ fewer corrector solves and hierarchy
+rebuilds, while a single corrector step per arclength step overshoots $F^*$.
 
 \section{Maximum flow}\label{sec:maxflow}
 The saturating instance \eqref{eq:rho} recovers the exact combinatorial maximum flow. Read
