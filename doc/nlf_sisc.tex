@@ -318,9 +318,8 @@ barrier schedule. The Beckmann congestion instance \eqref{eq:primal} is already 
 nonlinear Laplacian solved via existing linear Laplacian algorithms.
 
 \section{The NLF algorithm}\label{sec:algorithm}
-NLF is a continuation loop over the load $\alpha$, starting at $\alpha = 0$, where each step's solution serves as the initial guess to the next $\alpha$-step. Each fixed-$\alpha$ subproblem is solved by a handful of inexact inner solves (each to a tolerance proportional to the current nonlinear residual). The resulting correction is accepted through a line search (damped, inexact chord-Newton iteration). The inner solver's setup---its factor or hierarchy---is built once, frozen across $\alpha$-steps and re-formed only when an observed-convergence monitor signals it has drifted too far. The numbers of steps and inner solves are both bounded, implying empirical-$O(m)$ complexity. We describe the linear engine
-(\S\ref{sec:inner}), the fixed-load solve (\S\ref{sec:fas}), and the continuation through a fold
-(\S\ref{sec:continuation}).
+NLF always uses continuation, starting at $\alpha=0$ (trivial solution $\phi=0$) and stepping toward the target. For congestion (no fold), $\alpha$ is a given input and the continuation steps $\alpha$ directly to the target value in a short fixed ramp. For max-flow (fold), $\alpha$ is the unknown maximizer and the continuation switches to pseudo-arclength parametrization to track the solution curve through the fold to $F^*$. In both cases each fixed-$(\phi,\alpha)$ subproblem is solved by a handful of inexact chord-Newton steps. The inner solver's setup---its factor or hierarchy---is built once, frozen across continuation steps and re-formed only when an observed-convergence monitor signals it has drifted too far. The numbers of steps and inner solves are both bounded, implying empirical-$\Om$ complexity. We describe the linear engine
+(\S\ref{sec:inner}), the fixed-load solve (\S\ref{sec:fas}), and the continuation (\S\ref{sec:continuation}).
 
 \subsection{The inner Laplacian solve}\label{sec:inner}
 The outer loop treats the inner solver as a black box that's required to do three things: (i)~it solves a
@@ -395,18 +394,22 @@ per-level cap $\gamma_l\tau_l\le0.95$, so each cycle remains $\Om$), regrown and
 the factor exceeds $0.6$. This engages on $11$ of $2{,}003$ corpus graphs ($0.5\%$) and restores
 textbook behavior (a \texttt{roadNet-PA} $100$-cycle stall reduces to $5$ cycles).
 
-\subsection{Continuation through the fold (saturating laws only)}\label{sec:continuation}
-For the no-fold congestion class, the whole solver is Algorithm~\ref{alg:fixed} inside a short load
-ramp (Algorithm~\ref{alg:cont}, left): the ramp is plain warm-starting, needed only to globalize the
-first iterations, and the hierarchy state $H$ is shared across the entire chain.
+\subsection{Continuation}\label{sec:continuation}
+Both problem classes use continuation from $\alpha=0$; they differ only in parametrization
+(Algorithm~\ref{alg:cont}).
 
-A saturating law is different: a fixed-$\alpha$ solve is feasible iff $\alpha<F^*$ (the min-cut
-value), and as $\alpha\uparrow F^*$ the solution curve \emph{folds}---$\alpha(V)$ flattens onto the
-asymptote $F^*$ while the potentials grow without bound (Fig.~\ref{fig:cusp}); at the fold
-$\kappa(J)\sim(F^*-\alpha)^{-1}$ and the source--sink gap is
-$V=|\phi_s-\phi_t|\sim-\log(F^*-\alpha)$. Stepping $\alpha$ itself is therefore the worst choice:
-the feasible loads crowd at the fold and the step is forced to zero. The well-conditioned variable
-is the \emph{cut-mode amplitude}
+For the no-fold congestion class, $\alpha$ is a given target and the continuation steps $\alpha$
+directly: three fixed steps $\ell=\tfrac14,\tfrac12,1$ of the target load suffice to globalize
+convergence. Each step warm-starts from the previous solution and shares the same hierarchy state
+$H$ across the entire ramp.
+
+For the saturating (fold) class, $\alpha$ is the unknown maximizer. A fixed-$\alpha$ solve is
+feasible iff $\alpha<F^*$ (the min-cut value), and as $\alpha\uparrow F^*$ the solution curve
+\emph{folds}---$\alpha(V)$ flattens onto the asymptote $F^*$ while the potentials grow without
+bound (Fig.~\ref{fig:cusp}); at the fold $\kappa(J)\sim(F^*-\alpha)^{-1}$ and the source--sink gap
+is $V=|\phi_s-\phi_t|\sim-\log(F^*-\alpha)$. Stepping $\alpha$ itself is therefore the worst
+choice: the feasible loads crowd at the fold and the step is forced to zero. The well-conditioned
+variable is the \emph{cut-mode amplitude}
 $\psi=\chi^{\top}\phi\sim-\log(F^*-\alpha)$,\footnote{Justification of both asymptotics. Near the fold
 $\phi=V\chi+O(1)$, $\chi$ the source-side indicator, so every cut edge carries gradient
 $g_e=V+O(1)$. The saturating tail of \eqref{eq:rho} is
@@ -447,13 +450,17 @@ complement} $\chi^{\perp}$, at the measured uniform $\mu\approx0.01$. The border
 system nonsingular through the fold ($\kappa=\mathcal{O}(10^3)$ while $\kappa(J)\to\infty$).
 
 \begin{algorithm}[t]
-\caption{NLF continuation. Left: no-fold (congestion). Right: fold (max-flow).}
+\caption{NLF continuation (both classes start at $\alpha=0$, $\phi=0$, $H$ empty).
+  \textbf{Left:} no-fold / congestion ($\alpha$ given): $\alpha$-continuation with fixed steps.
+  \textbf{Right:} fold / max-flow ($\alpha$ unknown): pseudo-arclength continuation to $F^*$.}
 \label{alg:cont}
 \begin{algorithmic}[1]
-\State \textbf{No fold:} for $\ell=\tfrac14,\tfrac12,1$: run Algorithm~\ref{alg:fixed} at load
-$\ell\alpha$, warm-started, $H$ shared. \textbf{return} $\phi$
+\State \textbf{No fold ($\alpha$ given):} $\phi\gets0$, $H\gets\emptyset$.
+  For $\ell=\tfrac14,\tfrac12,1$: run Algorithm~\ref{alg:fixed} at load $\ell\alpha$,
+  warm-started from previous $\phi$, $H$ shared. \textbf{return} $\phi$
 \Statex
-\State \textbf{Fold:} climb $\alpha$ geometrically (each load by Algorithm~\ref{alg:fixed}) until
+\State \textbf{Fold ($\alpha$ unknown, find $F^*$):} $\phi\gets0$, $H\gets\emptyset$.
+  Climb $\alpha$ geometrically (each load by Algorithm~\ref{alg:fixed}) until
 infeasible---this brackets $F^*$
 \State refresh $H$; tangent $(\dot\phi,\dot\alpha)$ by \eqref{eq:tangent}
 \State predictor: $(\phi,\alpha)\mathrel{+}= \Delta s\,(\dot\phi,\dot\alpha)$; corrector: iterate
