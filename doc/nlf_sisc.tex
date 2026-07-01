@@ -97,7 +97,7 @@ converge in time $\propto m^{0.98}$
 commodities through one hierarchy at $\mathcal{O}(Km)$. We find that on real capacity data coupling inflates
 shared-corridor costs (${\le}8.8\times$) without rerouting.
 \item \emph{An $\Om$ maximum-flow solver} (\S\ref{sec:maxflow}). The saturating instance recovers the
-\emph{exact} combinatorial max-flow as a short, size-independent sequence of Laplacian solves, with
+\emph{exact} combinatorial max-flow as a short, bounded sequence of Laplacian solves, with
 the cut respecting multigrid coarsening arising for free. Not faster than a tuned combinatorial solver,
 but returns the cut potential and full parametric flow curve.
 \end{enumerate}
@@ -161,12 +161,11 @@ complex-valued non-separable AC power-flow equations~\cite{bindel-amg-pf}---a no
 with no objective and a non-Laplacian Jacobian, solved by nonlinear FAS multigrid with a multiplicative coarse correction (no Newton, no fold); a different problem class from the
 real, edge-separable, SPD-Laplacian constrained flow program here.
 
-\emph{Multilevel optimization.} NLF is \emph{not} multilevel optimization in the MG/OPT
-sense~\cite{nash-mgopt,gratton-rmtr,brandt-ron-mgopt}: it does not build coarse \emph{optimization} models or recurse
-the objective. It reduces the equilibrium to a \emph{single} nonlinear equation \eqref{eq:master} and
-employs multigrid (if LAMG+ is used) only as the linear inner solve inside a frozen-linearization chord-Newton
+\emph{Multilevel optimization.} NLF is not multilevel optimization in the MG/OPT
+sense~\cite{nash-mgopt,gratton-rmtr,brandt-ron-mgopt}: it does not build coarse optimization models or recurse
+the objective. While the equilibrium is nonlinear equation \eqref{eq:master}, NLF employs multigrid (if LAMG+ is used) only as the linear inner solve inside a frozen-linearization chord-Newton
 continuation; the nonlinearity is carried by the edge law and the outer continuation, not by a
-coarse-grid objective. However, Sec.~\ref{sec:dcopt} outlines how NLF might possibly be extended to a multilevel optimization paradigm when a cost functional is added.
+coarse-grid objective. However, Sec.~\ref{sec:dcopt} outlines how NLF might be extended to a multilevel optimization paradigm when a cost functional is added.
 
 \emph{Combinatorial and transport-specific solvers.} Augmenting-path and push--relabel max-flow
 \cite{goldberg-tarjan,boykov-kolmogorov} and the almost-linear-time exact algorithm
@@ -181,12 +180,12 @@ for max flow) and position the rest honestly where it does not (\S\ref{sec:compe
 \section{A unified resistor-network formulation}\label{sec:formulation}
 
 Let $B$ be the $n\times m$ signed node--edge incidence matrix of a connected graph ($B_{ie}=+1$ if
-node $i$ is the head of edge $e$, $-1$ if the tail). Write $\phi\in\R^n$ for the \emph{node
-potentials}, $d\in\R^n$ for a balanced demand ($\mathbf{1}^{\top}d=0$), and $\alpha\ge0$ for a
+node $i$ is the head of edge $e$, $-1$ if the tail). Write $\phi\in\R^n$ for the node
+potentials, $d\in\R^n$ for a balanced demand ($\mathbf{1}^{\top}d=0$), and $\alpha\ge0$ for a
 scalar load. Each edge $e$ carries a flow $f_e$ driven by its potential difference
 $g_e = (B^{\top}\phi)_e = \phi_i - \phi_j$
 where $i,j$ are the head and tail of $e$. The physics of the medium is encoded in a smooth,
-strictly monotone \emph{edge law} $\rho_e:\R\to\R$:
+strictly monotone edge law $\rho_e:\R\to\R$:
 \begin{equation}\label{eq:law}
   f_e = \rho_e(g_e).
 \end{equation}
@@ -311,70 +310,49 @@ systems is the core of a productive line of work, but NLF's mechanism is fundame
 descendants compute a sequence of \emph{linear} electrical flows $f=\mathrm{diag}(w)\,B^{\top}\phi$
 ---each a fixed weighted-Laplacian solve---and steer an \emph{outer} multiplicative-weights loop to a
 $(1+\epsilon)$-approximate max-flow; IPM for (generalized) flow
-\cite{daitch-spielman} likewise wrap a Laplacian solve in a barrier path-following loop. NLF instead places the nonlinearity in the \emph{constitutive law}: $f=\rho(B^{\top}\phi)$ is a
+\cite{daitch-spielman} likewise wrap a Laplacian solve in a barrier path-following loop. NLF instead places the nonlinearity in a \emph{constitutive law}: $f=\rho(B^{\top}\phi)$ is a
 saturating function of the gradient, so the single energy of \eqref{eq:master} encodes the
-capacity \emph{exactly} and its feasibility limit is the \emph{exact} min cut. The outer loop is then a short continuation through one scalar fold, not a reweighting or
+capacity exactly and its feasibility limit is the exact min cut. The outer loop is then a short continuation through one scalar fold, not a reweighting or
 barrier schedule. The Beckmann congestion instance \eqref{eq:primal} is already known
-\cite{beckmann}; what is new is the saturating-resistor reformulation of max-flow and the unified
-monotone-edge-law family that places max-flow, congestion, and minimum-delay routing under one
-nonlinear Laplacian, each solved by the same linear Laplacian inner solve.
+\cite{beckmann}; the novelty is the saturating-resistor reformulation of max-flow, and placing max-flow, congestion, and minimum-delay routing under one
+nonlinear Laplacian solved via existing linear Laplacian algorithms.
 
 \section{The NLF algorithm}\label{sec:algorithm}
-NLF is a continuation loop over the load $\alpha$, starting at $\alpha = 0$, where each step's solution serves as the initial guess to the next $\alpha$-step. Each fixed-$\alpha$ subproblem is solved by a handful of inexact inner solves (each to a tolerance proportional to the current nonlinear residual). The resulting correction is accepted through a line search (damped, inexact chord-Newton iteration). The inner solver's setup---its factor or hierarchy---is built once, frozen across $\alpha$-steps and re-formed only when an observed-convergence monitor signals it has drifted too far. The numbers of steps and inner solves are both bounded, implying empirical-$O(m)$ complexity. Below we describe the linear engine
+NLF is a continuation loop over the load $\alpha$, starting at $\alpha = 0$, where each step's solution serves as the initial guess to the next $\alpha$-step. Each fixed-$\alpha$ subproblem is solved by a handful of inexact inner solves (each to a tolerance proportional to the current nonlinear residual). The resulting correction is accepted through a line search (damped, inexact chord-Newton iteration). The inner solver's setup---its factor or hierarchy---is built once, frozen across $\alpha$-steps and re-formed only when an observed-convergence monitor signals it has drifted too far. The numbers of steps and inner solves are both bounded, implying empirical-$O(m)$ complexity. We describe the linear engine
 (\S\ref{sec:inner}), the fixed-load solve (\S\ref{sec:fas}), and the continuation through a fold
 (\S\ref{sec:continuation}).
 
 \subsection{The inner Laplacian solve}\label{sec:inner}
-The outer loop treats the inner solver as a black box and asks three things of it: (i)~it solves a
-graph-Laplacian system $L\phi=b$ in near-linear $\Om$ work; (ii)~its accuracy is tunable, so it can run
-\emph{inexactly} to the forcing tolerance $\eta\|r\|$ of the chord-Newton step (\S\ref{sec:fas}) rather
-than to machine precision; and (iii)~its \emph{setup} is separable from its \emph{solve}, so the setup
-is built once at a frozen linearization and reused---applied to the nonlinear residual---across many
-continuation and Newton steps. The formulation and the frozen-Newton/continuation outer method are the
-contribution; the inner solve is an interchangeable module, and any solver meeting (i)--(iii) is a
-drop-in engine.
+The outer loop treats the inner solver as a black box that's required to do three things: (i)~it solves a
+graph-Laplacian system $L\phi=b$ in near-linear $\Om$ work; (ii)~its accuracy is tunable, so it can match the $\eta\|r\|$ forcing tolerance  of the chord-Newton step (\S\ref{sec:fas}) rather
+than to machine precision; and (iii)~its setup is separable from its solve, so the setup can be 
+built once at a frozen linearization and reused across many continuation steps.
 
-Two public near-linear solvers meet all three with different internals. \emph{Approximate
-Cholesky}~\cite{approxchol} \textbf{sets up} a randomized incomplete sparse-Cholesky factor of
-$L$---a preconditioner, $\Om$ to build---and \textbf{solves} by preconditioned conjugate gradients to
-the requested tolerance. \emph{LAMG+}~\cite{lamgplus} \textbf{sets up} an aggregation-multigrid
+Two public near-$\Om$ solvers meet all three with different internals. \emph{Approximate
+Cholesky}~\cite{approxchol} sets up a randomized incomplete sparse-Cholesky factor preconditioner and solves by preconditioned conjugate gradients to
+the requested tolerance. \emph{LAMG+}~\cite{lamgplus} sets up an aggregation-multigrid
 hierarchy (relaxation-based affinity aggregation, low-degree Schur elimination, a guarded coarse
-operator) and \textbf{solves} by a fractional V-cycle with min-residual recombination; its setup and
-per-cycle solve are each $\Om$. In both, setup is the freezable object of requirement (iii) (the
-factor, the hierarchy) and the solve is the tunable object of (ii). We take \textbf{approximate
-Cholesky as the default}: the ablation of \S\ref{sec:ablation} finds it the faster default across the
-corpus at equal robustness. LAMG+ is interchangeable in \emph{robustness}---its wall-clock constant
-differs by graph class---and its cut-respecting hierarchy gives a structurally clean near-singular
-solve at the fold (next paragraph).
+operator) and solves by a multigrid cycle with min-residual recombination. We use approximate
+Cholesky as the default as it the faster default across the
+corpus at equal robustness (\S\ref{sec:ablation}). LAMG+ is as robust, while its wall-clock constant
+differs by graph class.
 
-What the outer loop freezes and lazily refreshes is the inner Laplacian solve itself---whether a
-multigrid hierarchy or a sparse approximate factorization---applied to the nonlinear residual; the
-choice does not affect convergence (\S\ref{sec:corpus}). One convenient property of LAMG+'s
-relaxation-based aggregation is that it is \emph{cut-respecting}: as the cut conductances vanish they
+While both inner solvers yield the same overall nonlinear convergence (\S\ref{sec:corpus}, one convenient property of LAMG+'s relaxation-based aggregation is that it is \emph{cut-respecting}: as the cut conductances vanish they
 decouple relaxation across the cut, so test vectors decorrelate and the affinity declines to aggregate
-across it; the measured $\mu\approx0.01$ then holds through the continuation (\S\ref{sec:maxflow}), with
-no fold-aware tuning. This is a feature of the LAMG+
-engine, not a requirement of the framework: adequate refresh of the frozen operator near the fold
-suffices for \emph{any} inner solver, and over-freezing degrades all of them equally. ($\alpha$, the
+across it. Its measured Asymptotic Convergence Factor (ACF) of $\approx0.01$ thus holds through the continuation with
+no fold-aware tuning (\S\ref{sec:maxflow}). This is specific feature of LAMG+, not a framework requirement: adequate refresh of the frozen operator near the fold
+suffices for any inner solver, and over-freezing degrades all of them equally. ($\alpha$, the
 continuation, and the fold never enter the linear solve; the singular cut direction near $F^*$ is
 deflated outside the engine, \S\ref{sec:continuation}.)
 
 \subsection{The fixed-load solve: a frozen-setup inner solve}\label{sec:fas}
-The problem at a fixed load $\alpha$ is \eqref{eq:master} itself: find the zero-mean potentials
-$\phi$ with $B\rho(B^{\top}\phi)=\alpha d$, i.e.\ drive the nonlinear residual
-$r(\phi)=\alpha d-B\rho(B^{\top}\phi)$ to zero. NLF solves it by Algorithm~\ref{alg:fixed}. Each
-pass of the loop costs one $\Om$ residual evaluation and one $\Om$ inner solve (run inexactly, to
-the forcing fraction $\eta\|r\|$, $\eta=0.05$~\cite{inexact-newton}); the expensive setup is paid
-only on refresh. The inner solve applies an approximate \emph{inverse} of the frozen linearization,
-$\delta\approx J_H^{-1}r$---the (frozen-)Newton direction. With a fresh
-setup and an exact solve the step would be exactly Newton's; frozen and inexact, it is a
-chord-Newton iteration whose linear rate the refresh monitor keeps below $0.25$.
+Eq.~\eqref{eq:master} with fixed $\alpha$ is solved by inexact chord-Newton iteration (Algorithm~\ref{alg:fixed}). At each step we evaluate the residual $r(\phi)=\alpha d-B\rho(B^{\top}\phi)$ and solve for the Newton direction $\delta\approx J_H^{-1}r$ using the inner Laplacian solver to tolerance $\eta\|r\|$, $\eta=0.05$~\cite{inexact-newton}). The Jacobian $J_H$ and the expensive setup hierarchy are only recalculated when chord Newton's linear convergence rate rises above $0.25$.
 
 \begin{algorithm}[t]
 \caption{NLF fixed-load solve}
 \label{alg:fixed}
 \begin{algorithmic}[1]
-\Require load $\alpha$; warm start $\phi$; inner-solver state $H$ (factor or hierarchy, shared across calls); relative
+\Require load $\alpha$; warm start $\phi$; inner-solver state $H$ (Cholesky factor or hierarchy, shared across calls); relative
 residual tolerance $\mathrm{tol}$ (default $10^{-9}$); forcing parameter $\eta$ (default $0.05$)
 \State $r \gets \alpha d - B\rho(B^{\top}\phi)$
 \While{$\|r\| > \mathrm{tol}\cdot\alpha\,\|d\|$}
@@ -398,14 +376,11 @@ $\phi\gets\phi+\tau\delta$; on failure with a stale $H$, refresh and retry once
 norm~\cite[Ch.~3]{nocedal-wright}. Because $\delta$ comes from a frozen linearization, a full step
 can overshoot right after a load increase where the law's curvature is strongest; backtracking by
 halving and accepting the first non-increasing residual guarantees monotone progress at negligible
-cost. Near the solution the full step is always accepted ($\tau=1$, one trial, measured), so
-asymptotically the damping is inactive.
+cost. Near the solution the full step is always accepted (one trial, $\tau=1$).
 
-\paragraph{When the setup is refreshed} Three triggers, all observed-convergence based, no
-tuning: (i) no setup yet; (ii) the per-step residual factor exceeded $0.25$---the frozen $J$ has
-drifted too far from the current linearization; (iii) the line search stalled on a stale setup
-(refresh, retry once; only a fresh-setup stall terminates). Measured across the corpus of
-\S\ref{sec:corpus}, a handful of refreshes per solve suffice (often one).
+\paragraph{When the setup is refreshed} This happens when one of the following three conditions trigger: (i) no setup yet; (ii) the per-step residual factor exceeded $0.25$---the frozen $J$ has drifted too far from the current linearization; (iii) the line search stalled on a stale setup. In that case, we first refresh $H$ with the current linearization $J(\phi)$ and retry the line search. If it still fails, we break and report a convergence failure.
+
+Measured across the corpus of \S\ref{sec:corpus}, a handful of refreshes per solve suffice (often just one).
 
 \paragraph{Deep hierarchies (LAMG+ engine only)} The multigrid engine needs one piece of care on
 graphs of huge diameter (${\ge}20$-level hierarchies: country-scale roads, large FEM meshes), where the
@@ -1392,7 +1367,8 @@ Applications to Fluid Dynamics, Revised Edition}, SIAM, 2011 (frozen-$\tau$ \S15
 Laplacian equations by approximate elimination}, arXiv:2303.00709, 2023.
 \bibitem{napov-notay} A.~Napov and Y.~Notay, \emph{An efficient multigrid method for graph Laplacian
 systems II: robust aggregation}, SIAM J.\ Sci.\ Comput.\ \textbf{39}(5), S379--S403, 2017.
-\bibitem{bargera2002} H.~Bar-Gera, \emph{Origin-based algorithm for the traffic assignment problem},
+\bibitem{bargera2002} H.~Bar-Gera, \emph{Origi
+n-based algorithm for the traffic assignment problem},
 Transportation Sci.\ \textbf{36}(4), 398--417, 2002.
 \bibitem{bargera2010} H.~Bar-Gera, \emph{Traffic assignment by paired alternative segments (TAPAS)},
 Transportation Res.\ Part B \textbf{44}(8--9), 1022--1046, 2010.
