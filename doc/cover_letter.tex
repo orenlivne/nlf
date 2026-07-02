@@ -1,0 +1,64 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1.1in]{geometry}
+\usepackage{hyperref}
+\hypersetup{colorlinks=true,urlcolor=blue!60!black}
+\usepackage{parskip}
+\pagestyle{empty}
+
+\begin{document}
+
+\noindent
+Oren E.\ Livne\\
+Pine Birch Analytics\\
+35 Kelinger Rd, Churchville, PA 18966-1033\\
+\href{mailto:oren.livne@gmail.com}{oren.livne@gmail.com}\\[6pt]
+\today
+
+\bigskip
+\noindent
+Editor-in-Chief\\
+\textit{SIAM Journal on Scientific Computing}
+
+\bigskip
+\noindent
+Dear Editor,
+
+\medskip
+We submit for consideration the manuscript \textbf{``NLF: A Resistor-Network Framework and
+Linear-Time Solver for Convex Network-Flow Equilibria''} by Oren E.\ Livne, for publication in
+\textit{SIAM Journal on Scientific Computing} in the section
+\textbf{Numerical Algorithms for Scientific Computing}.
+
+The paper presents NLF, a unified solver for a broad class of convex network-flow problems ---
+congestion (traffic) routing, minimum-delay communication routing, and exact maximum flow ---
+cast as a single nonlinear graph Laplacian $B\rho(B^{\top}\phi)=\alpha d$.
+The solver combines a damped chord-Newton iteration on a frozen linearization with
+pseudo-arclength continuation through the max-flow fold, delegating each linear step to a
+near-linear Laplacian solver (approximate Cholesky default; LAMG+ interchangeable).
+The whole nonlinear solve costs 2--4 linear Laplacian solves, making the wall-clock empirically
+$\mathcal{O}(m)$ in the edge count across a 2,003-graph SuiteSparse corpus spanning five size
+decades (up to $5.6\times10^7$ edges).
+Against a state-of-the-art interior-point method, NLF is a median $2.6\times$ faster where both
+converge and $>45\times$ on poorly-separable graphs where the IPM's direct factorization is
+superlinear; against matrix-free L-BFGS, a median $4.2\times$ faster and the only solver to
+complete within budget on the 90 hardest instances.
+
+We believe this work is well matched to SISC's scope: it introduces a practical, reproducible
+method with empirical near-linear complexity, a large-scale corpus evaluation, and a unifying
+framework across three classical problem classes.
+Code, scripts, and benchmark data are openly available at
+\url{https://github.com/orenlivne/nlf}.
+We request the \textbf{SISC Reproducibility Badge: code and data available}.
+
+This manuscript has not been submitted elsewhere and is not under review at another journal.
+All authors have approved submission.
+
+\bigskip
+\noindent
+Sincerely,
+
+\bigskip\bigskip
+\noindent
+Oren E.\ Livne
+
+\end{document}
