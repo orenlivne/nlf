@@ -1,7 +1,7 @@
 """
     NLF
 
-Flow Algebraic Multigrid: a nonlinear, box-constrained max-flow / network-flow solver
+Nonlinear Laplacian Flow: a nonlinear, box-constrained max-flow / network-flow solver
 built ON TOP of the LAMG+ linear graph-Laplacian solver.
 
 LAMG+ (the `LAMG` package, github.com/orenlivne/lamgplus) is the inner linear engine and is
@@ -44,6 +44,7 @@ include("nlf_test_set.jl")
 include("nlf_directed.jl")
 include("nlf_maxflow.jl")
 include("nlf_solve.jl")
+include("nlf_flow.jl")   # generic source-form nonlinear-flow Newton + continuation (SSL, BPR, …)
 
 # Re-export the entire LAMG+ public API so `using NLF` also exposes the inner solver
 # (laplacian, Level, Multilevel, LAMGOptions, setup, solve, ...), preserving the old
@@ -77,6 +78,8 @@ export
     nlf_maxflow,
     MaxFlowTestCase, build_test_set,
     DirectedMaxFlowState, relax_arrow_hurwicz!, shrinkage_arrow_hurwicz,
-    relax_chambolle_pock!, shrinkage_chambolle_pock
+    relax_chambolle_pock!, shrinkage_chambolle_pock,
+    # generic source-form nonlinear-flow solver (nlf_flow.jl)
+    FlowSolve, newton_flow!, flow_continuation!
 
 end # module
