@@ -59,13 +59,37 @@ uses a pinned sparse Cholesky (small graphs / ground truth). The hierarchy refs
 """
 function newton_flow!(x, B, law!, b; inner = :multigrid, nmax = 80, tol = 1e-8,
                       refresh = 0.25, eta = 0.05, tlim = Inf,
-                      build_solver = nothing,
+                      build_solver = nothing, energy = nothing,
                       H = Ref{Any}(nothing), SC = Ref(1.0), ST = Ref(false),
                       setups = Ref(0), GG = Ref(1.0))
     n = size(B, 1); m = size(B, 2)
     f = zeros(m); dρ = zeros(m); steps = 0; nr_prev = Inf; t0 = time()
     keep = 2:n                                   # pin node 1 for the :direct SPD reduced solve
     bn = max(norm(b), 1.0)
+    use_energy = energy !== nothing
+    # Line search: when an `energy` callback E(x) is supplied (E is the convex flow energy whose
+    # gradient is B ρ(Bᵀx)−b), backtrack to Armijo energy decrease — the principled globalizer that
+    # stays robust where plain residual-monotonicity stalls (stiff, high-contrast power-law graphs at
+    # large p). Otherwise fall back to residual monotonicity. Returns true on an accepted step.
+    linesearch! = (δ, r, nr) -> begin
+        τ = 1.0
+        if use_energy
+            E0 = energy(x); gTd = dot(Vector(r), δ)          # ∇E·δ = r·δ (< 0 for a descent direction)
+            for _ in 1:60
+                xt = _zeromean!(x .+ τ .* δ)
+                if energy(xt) <= E0 + 1e-4 * τ * gTd; copyto!(x, xt); return true; end
+                τ *= 0.5
+            end
+        else
+            for _ in 1:60
+                xt = _zeromean!(x .+ τ .* δ); gt = B' * xt
+                ft = similar(f); dt = similar(dρ); law!(ft, dt, gt)
+                if norm(B * ft .- b) <= nr; copyto!(x, xt); return true; end
+                τ *= 0.5
+            end
+        end
+        false
+    end
     # `build_solver`, when supplied, injects a swappable inner engine: it maps the scaled clean
     # graph Laplacian L to an apply-closure `rhs -> x` solving Lx=rhs (e.g. approximate Cholesky).
     # When it is `nothing`, the default LAMG+ hierarchy is used. This keeps the inner solve
@@ -101,21 +125,10 @@ function newton_flow!(x, B, law!, b; inner = :multigrid, nmax = 80, tol = 1e-8,
             δ = mg_step(r)
         end
         nr_prev = nr
-        τ = 1.0; ok = false
-        for _ in 1:60
-            xt = _zeromean!(x .+ τ .* δ); gt = B' * xt
-            ft = similar(f); dt = similar(dρ); law!(ft, dt, gt)
-            if norm(B * ft .- b) <= nr; copyto!(x, xt); ok = true; break; end
-            τ *= 0.5
-        end
+        ok = linesearch!(δ, r, nr)
         if !ok && inner != :direct && ST[]          # stale stall: rebuild + retry once
             rebuild!(dρf); δ = mg_step(r)
-            for _ in 1:60
-                xt = _zeromean!(x .+ τ .* δ); gt = B' * xt
-                ft = similar(f); dt = similar(dρ); law!(ft, dt, gt)
-                if norm(B * ft .- b) <= nr; copyto!(x, xt); ok = true; break; end
-                τ *= 0.5
-            end
+            ok = linesearch!(δ, r, nr)
         end
         ok || break
         ST[] = true
@@ -134,12 +147,14 @@ whole chain. The canonical use is continuation in the exponent `p` from the p=2 
 basin of the previous, cheaper one. Returns the per-stage `FlowSolve` list.
 """
 function flow_continuation!(x, B, laws, b; inner = :multigrid, tol = 1e-8, nmax = 80,
-                            refresh = 0.25, tlim = Inf, build_solver = nothing, setups = Ref(0),
+                            refresh = 0.25, tlim = Inf, build_solver = nothing, energies = nothing,
+                            setups = Ref(0),
                             H = Ref{Any}(nothing), SC = Ref(1.0), ST = Ref(false), GG = Ref(1.0))
     out = FlowSolve[]
-    for law! in laws
+    for (i, law!) in enumerate(laws)
+        en = energies === nothing ? nothing : energies[i]
         res = newton_flow!(x, B, law!, b; inner = inner, nmax = nmax, tol = tol,
-                           refresh = refresh, tlim = tlim, build_solver = build_solver,
+                           refresh = refresh, tlim = tlim, build_solver = build_solver, energy = en,
                            H = H, SC = SC, ST = ST, setups = setups, GG = GG)
         push!(out, res)
     end
