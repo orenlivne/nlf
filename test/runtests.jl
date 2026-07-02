@@ -22,4 +22,5 @@ using NLF   # re-exports the LAMG+ inner-solver API (laplacian, setup, solve, Mu
     include("test_box_projected_gs.jl")             # voltage-driving smoother (moderate V)
     include("test_nlf_maxflow.jl")                 # TRUE max-flow: α-continuation + cut-mode bordering
     include("test_lazy_refresh.jl")                 # lazy LAMG+ hierarchy refresh (same F*, fewer setups)
+    include("test_nlf_flow.jl")                     # generic source-form nonlinear-flow solver + hooks
 end

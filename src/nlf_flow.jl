@@ -59,21 +59,31 @@ uses a pinned sparse Cholesky (small graphs / ground truth). The hierarchy refs
 """
 function newton_flow!(x, B, law!, b; inner = :multigrid, nmax = 80, tol = 1e-8,
                       refresh = 0.25, eta = 0.05, tlim = Inf,
+                      build_solver = nothing,
                       H = Ref{Any}(nothing), SC = Ref(1.0), ST = Ref(false),
                       setups = Ref(0), GG = Ref(1.0))
     n = size(B, 1); m = size(B, 2)
     f = zeros(m); dρ = zeros(m); steps = 0; nr_prev = Inf; t0 = time()
     keep = 2:n                                   # pin node 1 for the :direct SPD reduced solve
     bn = max(norm(b), 1.0)
+    # `build_solver`, when supplied, injects a swappable inner engine: it maps the scaled clean
+    # graph Laplacian L to an apply-closure `rhs -> x` solving Lx=rhs (e.g. approximate Cholesky).
+    # When it is `nothing`, the default LAMG+ hierarchy is used. This keeps the inner solve
+    # engine-agnostic, exactly as in the NLF framework.
+    use_ext = build_solver !== nothing
     rebuild! = (dρf) -> begin
-        SC[] = maximum(dρf); J = B * Diagonal(dρf) * B'
-        H[] = setup(_laplacian_clean(J ./ SC[]); options = LAMGOptions())
+        SC[] = maximum(dρf); Lc = _laplacian_clean((B * Diagonal(dρf) * B') ./ SC[])
+        H[] = use_ext ? build_solver(Lc) : setup(Lc; options = LAMGOptions())
         ST[] = false; setups[] += 1
     end
     mg_step = (r) -> begin
-        δ, info = solve(H[], _zeromean!(-Vector(r) ./ SC[]);
-                        options = LAMGOptions(tol = eta, γ_coarse_growth = GG[]))
-        get(info, :gamma_escalated, false) && (GG[] = 1.15)
+        rhs = _zeromean!(-Vector(r) ./ SC[])
+        if use_ext
+            δ = H[](rhs)
+        else
+            δ, info = solve(H[], rhs; options = LAMGOptions(tol = eta, γ_coarse_growth = GG[]))
+            get(info, :gamma_escalated, false) && (GG[] = 1.15)
+        end
         _zeromean!(δ)
     end
     for it in 1:nmax
@@ -124,12 +134,12 @@ whole chain. The canonical use is continuation in the exponent `p` from the p=2 
 basin of the previous, cheaper one. Returns the per-stage `FlowSolve` list.
 """
 function flow_continuation!(x, B, laws, b; inner = :multigrid, tol = 1e-8, nmax = 80,
-                            refresh = 0.25, tlim = Inf, setups = Ref(0))
-    H = Ref{Any}(nothing); SC = Ref(1.0); ST = Ref(false); GG = Ref(1.0)
+                            refresh = 0.25, tlim = Inf, build_solver = nothing, setups = Ref(0),
+                            H = Ref{Any}(nothing), SC = Ref(1.0), ST = Ref(false), GG = Ref(1.0))
     out = FlowSolve[]
     for law! in laws
         res = newton_flow!(x, B, law!, b; inner = inner, nmax = nmax, tol = tol,
-                           refresh = refresh, tlim = tlim,
+                           refresh = refresh, tlim = tlim, build_solver = build_solver,
                            H = H, SC = SC, ST = ST, setups = setups, GG = GG)
         push!(out, res)
     end
