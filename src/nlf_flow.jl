@@ -56,10 +56,15 @@ Damped inexact chord-Newton for `B ρ(Bᵀx) = b`, warm-started from `x` (mutate
 `inner=:multigrid` uses the LAMG+ near-linear engine (lazy hierarchy refresh); `inner=:direct`
 uses a pinned sparse Cholesky (small graphs / ground truth). The hierarchy refs
 (`H,SC,setups,GG`) may be shared across a continuation chain to freeze the setup across solves.
+`anderson` (default 0 = off) enables a guarded Anderson acceleration with that history window: it
+cancels the slow linear error mode that stalls stiff, near-degenerate systems (e.g. large-`p`
+`p`-Laplacian on hub-dominated graphs, where the floored Hessian yields a modified-Newton rate
+`ρ→1`). Guarded: the mixed candidate is accepted only when it does not worsen the merit vs. the
+plain step, so the fixed point and monotone global convergence are preserved.
 """
 function newton_flow!(x, B, law!, b; inner = :multigrid, nmax = 80, tol = 1e-8,
                       refresh = 0.25, eta = 0.05, tlim = Inf,
-                      build_solver = nothing, energy = nothing,
+                      build_solver = nothing, energy = nothing, anderson = 0,
                       H = Ref{Any}(nothing), SC = Ref(1.0), ST = Ref(false),
                       setups = Ref(0), GG = Ref(1.0))
     n = size(B, 1); m = size(B, 2)
@@ -110,6 +115,32 @@ function newton_flow!(x, B, law!, b; inner = :multigrid, nmax = 80, tol = 1e-8,
         end
         _zeromean!(δ)
     end
+    # Guarded Anderson acceleration (opt-in, `anderson` = history window; 0 disables). Treats one
+    # accepted chord-Newton step as a fixed-point map G(x_prev)=x and mixes the last `anderson`+1
+    # pairs to cancel the slow linear error mode that stalls stiff, near-degenerate systems (large-p
+    # p-Laplacian on hub-dominated graphs: floored Hessian ⇒ modified-Newton rate ρ→1). The mixed
+    # candidate is ACCEPTED ONLY IF it does not worsen the merit (energy if supplied, else residual)
+    # versus the plain step, so monotone global convergence and the fixed point are untouched — it
+    # can only reduce the step count, never change the answer or diverge.
+    Xh = Vector{Vector{Float64}}(); Gh = Vector{Vector{Float64}}()
+    anderson_accel! = (xprev, nr) -> begin           # x currently holds the plain accepted iterate
+        push!(Xh, xprev); push!(Gh, copy(x))
+        while length(Xh) > anderson + 1; popfirst!(Xh); popfirst!(Gh); end
+        mk = length(Xh); mk < 2 && return
+        F = [Gh[j] .- Xh[j] for j in 1:mk]                       # fixed-point residuals G(x)−x
+        ΔF = reduce(hcat, [F[j] .- F[mk] for j in 1:mk-1])       # n×(mk−1) least-squares system
+        local γ
+        try; γ = ΔF \ F[mk]; catch; return; end                 # skip on rank-deficient window
+        all(isfinite, γ) || return
+        cand = copy(Gh[mk]); for j in 1:mk-1; cand .-= γ[j] .* (Gh[j] .- Gh[mk]); end
+        _zeromean!(cand)
+        if use_energy
+            energy(cand) <= energy(x) && copyto!(x, cand)        # never worse than the plain step
+        else
+            gt = B' * cand; ft = similar(f); dt = similar(dρ); law!(ft, dt, gt)
+            norm(B * ft .- b) <= nr && copyto!(x, cand)
+        end
+    end
     for it in 1:nmax
         steps = it
         g = B' * x; law!(f, dρ, g); r = B * f .- b; nr = norm(r)
@@ -125,12 +156,14 @@ function newton_flow!(x, B, law!, b; inner = :multigrid, nmax = 80, tol = 1e-8,
             δ = mg_step(r)
         end
         nr_prev = nr
+        xprev = anderson > 0 ? copy(x) : x
         ok = linesearch!(δ, r, nr)
         if !ok && inner != :direct && ST[]          # stale stall: rebuild + retry once
             rebuild!(dρf); δ = mg_step(r)
             ok = linesearch!(δ, r, nr)
         end
         ok || break
+        anderson > 0 && anderson_accel!(xprev, nr)
         ST[] = true
     end
     g = B' * x; law!(f, dρ, g)
@@ -148,14 +181,14 @@ basin of the previous, cheaper one. Returns the per-stage `FlowSolve` list.
 """
 function flow_continuation!(x, B, laws, b; inner = :multigrid, tol = 1e-8, nmax = 80,
                             refresh = 0.25, tlim = Inf, build_solver = nothing, energies = nothing,
-                            setups = Ref(0),
+                            anderson = 0, setups = Ref(0),
                             H = Ref{Any}(nothing), SC = Ref(1.0), ST = Ref(false), GG = Ref(1.0))
     out = FlowSolve[]
     for (i, law!) in enumerate(laws)
         en = energies === nothing ? nothing : energies[i]
         res = newton_flow!(x, B, law!, b; inner = inner, nmax = nmax, tol = tol,
                            refresh = refresh, tlim = tlim, build_solver = build_solver, energy = en,
-                           H = H, SC = SC, ST = ST, setups = setups, GG = GG)
+                           anderson = anderson, H = H, SC = SC, ST = ST, setups = setups, GG = GG)
         push!(out, res)
     end
     out
