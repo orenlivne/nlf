@@ -370,7 +370,7 @@ end
 
 """
     build_test_set(; tiers = (1, 2, 3),
-                    data_dir = joinpath(@__DIR__, "..", "data", "maxflow"),
+                    data_dir = joinpath(get(ENV, "AIER_DATA", joinpath(homedir(), "code", "aier", "data")), "maxflow"),
                     ss_data_dir = joinpath(@__DIR__, "..", "data"),
                     ss_max::Int = 20,
                     rng_seed::UInt = 0xfa11) -> Vector{MaxFlowTestCase}
@@ -379,7 +379,7 @@ Assemble the max-flow test set. Pass `tiers = (1, 2, 3, 4)` to also
 include the SuiteSparse-derived instances (heavier).
 """
 function build_test_set(; tiers = (1, 2, 3),
-                          data_dir = joinpath(@__DIR__, "..", "data", "maxflow"),
+                          data_dir = joinpath(get(ENV, "AIER_DATA", joinpath(homedir(), "code", "aier", "data")), "maxflow"),
                           ss_data_dir = joinpath(@__DIR__, "..", "data"),
                           ss_max::Int = 20,
                           rng_seed = UInt(0xfa11))

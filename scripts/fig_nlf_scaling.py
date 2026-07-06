@@ -7,7 +7,7 @@ import csv, numpy as np, matplotlib
 matplotlib.use("Agg"); import matplotlib.pyplot as plt
 
 TEAL="#00435A"; AQUA="#31CBC8"; ORANGE="#E8743B"; GREY="#7A8A90"
-D="/Users/oren/code/mg/maxflow/LAMG.jl/doc/paper_program/"
+D="/Users/oren/code/old/maxflow/LAMG.jl/doc/paper_program/"
 fam=[r for r in csv.DictReader(open(D+"nlf_scaling.csv")) if int(r["ok"])==1]
 bk =list(csv.reader(open(D+"bk_scaling.csv")))[1:]
 def col(name): return {"grid2d":TEAL,"grid3d":AQUA,"random":ORANGE}.get(name,GREY)

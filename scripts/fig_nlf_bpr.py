@@ -6,7 +6,7 @@ separators), NLF wins + Ipopt blows up on random. Data: nlf_bpr_scaling.csv."""
 import csv, numpy as np, matplotlib
 matplotlib.use("Agg"); import matplotlib.pyplot as plt
 TEAL="#00435A"; AQUA="#31CBC8"; ORANGE="#E8743B"
-D="/Users/oren/code/mg/maxflow/LAMG.jl/doc/paper_program/"
+D="/Users/oren/code/old/maxflow/LAMG.jl/doc/paper_program/"
 rows=list(csv.DictReader(open(D+"nlf_bpr_scaling.csv")))
 def f(x):
     try: return float(x)

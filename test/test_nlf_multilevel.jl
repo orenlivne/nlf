@@ -100,7 +100,7 @@ using NLF
     @testset "multilevel FAS hierarchy builds on real DIMACS vision instance" begin
         # Only run if the file exists locally (gitignored — must be
         # extracted via data/maxflow/README.md instructions).
-        path = joinpath(@__DIR__, "..", "data", "maxflow", "BVZ-tsukuba0.max")
+        path = joinpath(get(ENV, "AIER_DATA", joinpath(homedir(), "code", "aier", "data")), "maxflow", "BVZ-tsukuba0.max")
         if !isfile(path)
             @warn "Skipping DIMACS test — $path not extracted."
             return

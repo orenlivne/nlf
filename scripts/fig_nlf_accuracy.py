@@ -5,7 +5,7 @@ import csv, numpy as np, matplotlib
 matplotlib.use("Agg"); import matplotlib.pyplot as plt
 COL={"web":"#E8743B","social":"#C0392B","road":"#7A8A90","FEM":"#31CBC8"}
 MK={"web":"s","social":"D","road":"P","FEM":"^"}
-D="/Users/oren/code/mg/maxflow/LAMG.jl/doc/paper_program/"
+D="/Users/oren/code/old/maxflow/LAMG.jl/doc/paper_program/"
 rows=list(csv.DictReader(open(D+"nlf_accuracy.csv")))
 fig,ax=plt.subplots(figsize=(6.0,4.4))
 slopes={}

@@ -4,7 +4,7 @@ graph class: flat (O(m)) and bounded across structured/FEM/web/social/road/citat
 LAMG+'s graph-class robustness. Data: nlf_robustness.csv."""
 import csv, numpy as np, matplotlib
 matplotlib.use("Agg"); import matplotlib.pyplot as plt
-D="/Users/oren/code/mg/maxflow/LAMG.jl/doc/paper_program/"
+D="/Users/oren/code/old/maxflow/LAMG.jl/doc/paper_program/"
 rows=list(csv.DictReader(open(D+"nlf_robustness.csv")))
 def f(x):
     try: return float(x)

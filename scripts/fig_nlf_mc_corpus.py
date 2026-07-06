@@ -6,7 +6,7 @@ slope-1 reference, with the single-commodity sweep (grey) underneath for the K-c
 import csv, numpy as np, matplotlib
 matplotlib.use("Agg"); import matplotlib.pyplot as plt
 TEAL="#00435A"; ORANGE="#E8743B"; GREY="#8A99A0"; AQUA="#31CBC8"
-D="/Users/oren/code/mg/maxflow/LAMG.jl/doc/paper_program/"
+D="/Users/oren/code/old/maxflow/LAMG.jl/doc/paper_program/"
 rows=[r for r in csv.DictReader(open(D+"nlf_mc_corpus.csv")) if r["converged"]=="1"]
 m=np.array([float(r["m"]) for r in rows]); t=np.array([float(r["nlf_s"]) for r in rows])
 it=np.array([int(r["nlf_steps"]) for r in rows]); su=np.array([int(r["setups"]) for r in rows])

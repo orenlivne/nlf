@@ -9,7 +9,7 @@ matplotlib.use("Agg"); import matplotlib.pyplot as plt
 from matplotlib.collections import LineCollection
 TEAL="#00435A"; ORANGE="#E8743B"; GREY="#8A99A0"
 CK=["#0072B2","#D55E00","#009E73"]                                  # commodity colors (CB-safe)
-D="/Users/oren/code/mg/maxflow/LAMG.jl/doc/paper_program/"
+D="/Users/oren/code/old/maxflow/LAMG.jl/doc/paper_program/"
 coords={}
 gj=json.load(open("/tmp/tn_probe/SiouxFalls/SiouxFallsCoordinates.geojson"))
 for ft in gj["features"]:

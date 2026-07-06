@@ -5,7 +5,7 @@
 import csv, numpy as np, matplotlib
 matplotlib.use("Agg"); import matplotlib.pyplot as plt
 TEAL="#00435A"; AQUA="#31CBC8"; ORANGE="#E8743B"; GREY="#7A8A90"
-D="/Users/oren/code/mg/maxflow/LAMG.jl/doc/paper_program/"
+D="/Users/oren/code/old/maxflow/LAMG.jl/doc/paper_program/"
 rows=list(csv.DictReader(open(D+"nlf_traffic.csv")))
 def fam(r): return r["instance"].split("/")[0]
 def f(x):

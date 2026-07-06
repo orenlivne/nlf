@@ -158,6 +158,6 @@ axR.set_title("(B3) congestion: Sioux Falls, computed NLF equilibrium", fontsize
 axR.set_aspect("equal"); axR.set_anchor("C"); axR.axis("off")
 
 plt.tight_layout()
-out = "/Users/oren/code/mg/maxflow/LAMG.jl/doc/paper_program/nlf_formulation.pdf"
+out = "/Users/oren/code/old/maxflow/LAMG.jl/doc/paper_program/nlf_formulation.pdf"
 plt.savefig(out, bbox_inches="tight"); plt.savefig(out.replace(".pdf",".png"), dpi=140, bbox_inches="tight")
 print("wrote", out)
